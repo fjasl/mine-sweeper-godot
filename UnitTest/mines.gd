@@ -51,6 +51,7 @@ func start_game() -> void:
 
 
 func fill_covered() -> void:
+	clear()   # 先把上一局(或改尺寸后残留)的格子全部清掉,再画新的
 	for x in cols:
 		for y in rows:
 			set_cell(Vector2i(x,y), 0, TILE["covered"])

@@ -7,6 +7,7 @@
 [ext_resource type="PackedScene" uid="uid://crl57boekoxaw" path="res://UnitTest/score_timer.tscn" id="4_4i22m"]
 [ext_resource type="PackedScene" uid="uid://ctii1w0xso3aj" path="res://UnitTest/mine_counter.tscn" id="5_5mjca"]
 [ext_resource type="PackedScene" uid="uid://hjljqr3jiy3b" path="res://UnitTest/state_face.tscn" id="6_lo4dc"]
+[ext_resource type="PackedScene" uid="uid://c2gw8tsk62yka" path="res://ui.tscn" id="8_sus66"]
 
 [node name="Main" type="Node2D" unique_id=289937505]
 script = ExtResource("1_ydgul")
@@ -26,3 +27,5 @@ script = ExtResource("1_7b1y1")
 [node name="Camera2D" type="Camera2D" parent="." unique_id=1105508075]
 position = Vector2(640, 360)
 script = ExtResource("2_gm1ts")
+
+[node name="UILayer" parent="." unique_id=1560602418 instance=ExtResource("8_sus66")]
