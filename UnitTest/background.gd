@@ -1,5 +1,7 @@
 extends Node2D
 
+@export var centerInViewport: bool = true
+
 @export var cellSize: int = 16
 @export var boardColumns: int = 30
 @export var boardRows: int = 16
@@ -18,13 +20,29 @@ const COLOR_BG: Color = Color("#C0C0C0")
 const COLOR_HIGHLIGHT: Color = Color("#FFFFFF")
 const COLOR_SHADOW: Color = Color("#808080")
 
-func _draw():
-	# 总宽度：外层高光 + 左边框 + 棋盘高光 + 棋盘宽度 + 棋盘阴影 + 右边框
+func _ready():
+	# 想让整块棋盘画在屏幕中心：移动节点 position 即可整体平移绘制内容。
+	# 勾掉 centerInViewport 就可以手动拖拽/填充 position 自由摆放。
+	if centerInViewport:
+		center_in_viewport()
+
+# 整块棋盘的包围尺寸（本地 (0,0) 就是绘制原点）
+func board_size() -> Vector2:
 	var totalWidth: int = outerHighlightThickness + leftBorderThickness + boardBevelThickness + cellSize * boardColumns + boardBevelThickness + rightBorderThickness
-	
-	# 总高度：外层高光 + 中上边框 + 计分板高光 + 计分板高度 + 计分板阴影 + 中中边框 + 棋盘高光 + 棋盘高度 + 棋盘阴影 + 中底边框
 	var totalHeight: int = outerHighlightThickness + middleTopBorderThickness + scoreboardBevelThickness + scoreboardHeight + scoreboardBevelThickness + middleCenterBorderThickness + boardBevelThickness + cellSize * boardRows + boardBevelThickness + middleBottomBorderThickness
-	
+	return Vector2(totalWidth, totalHeight)
+
+# 把整块棋盘平移到当前视口中心
+func center_in_viewport() -> void:
+	var viewport_size: Vector2 = get_viewport_rect().size
+	position = (viewport_size - board_size()) / 2.0
+
+func _draw():
+	# 总宽度/总高度：本地坐标为原点，绘制内容整体由节点 position 决定位置
+	var bsize: Vector2 = board_size()
+	var totalWidth: int = int(bsize.x)
+	var totalHeight: int = int(bsize.y)
+
 	# 背景色
 	draw_rect(Rect2(Vector2.ZERO, Vector2(totalWidth, totalHeight)), COLOR_BG)
 	
