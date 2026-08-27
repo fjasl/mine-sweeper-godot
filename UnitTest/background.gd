@@ -38,28 +38,56 @@ func _draw():
 	var scoreStartPoint: Vector2 = Vector2(outerHighlightThickness+ leftBorderThickness, outerHighlightThickness+ middleTopBorderThickness)
 	var scoreboardWidth: int = totalWidth- outerHighlightThickness- leftBorderThickness- rightBorderThickness
 	
-	#计分板
-	#计分板横向亮光
-	draw_rect(Rect2(Vector2(scoreStartPoint.x, scoreStartPoint.y+ scoreboardHeight- scoreboardBevelThickness), Vector2(scoreboardWidth, scoreboardBevelThickness)), COLOR_HIGHLIGHT)
-	#计分板纵向亮光
-	draw_rect(Rect2(Vector2(scoreStartPoint.x+ scoreboardWidth- scoreboardBevelThickness, scoreStartPoint.y), Vector2(scoreboardBevelThickness, scoreboardHeight)), COLOR_HIGHLIGHT)
-	
-	#计分板横向阴影
-	draw_rect(Rect2(scoreStartPoint, Vector2(scoreboardWidth, scoreboardBevelThickness)), COLOR_SHADOW)
-	#计分板纵向阴影
-	draw_rect(Rect2(scoreStartPoint, Vector2(scoreboardBevelThickness, scoreboardHeight)), COLOR_SHADOW)
+	#计分板（左下角、右上角 45° 斜切衔接，而非矩形直角覆盖）
+	_draw_panel_bevel(scoreStartPoint, Vector2(scoreboardWidth, scoreboardHeight), scoreboardBevelThickness)
 	
 	#棋盘变量
 	var boardStartPoint: Vector2 = Vector2(outerHighlightThickness+ leftBorderThickness, outerHighlightThickness+ middleTopBorderThickness+ scoreboardHeight+ middleCenterBorderThickness)
 	var boardWidth = cellSize* boardColumns+ boardBevelThickness*2
 	var boardHeight = cellSize* boardRows+ boardBevelThickness*2
 	
-	#棋盘横向高亮
-	draw_rect(Rect2(Vector2(boardStartPoint.x, boardStartPoint.y+ boardHeight- boardBevelThickness),Vector2(boardWidth, boardBevelThickness)), COLOR_HIGHLIGHT)
-	#棋盘纵向高亮
-	draw_rect(Rect2(Vector2(boardStartPoint.x+ boardWidth- boardBevelThickness, boardStartPoint.y),Vector2(boardBevelThickness, boardHeight)), COLOR_HIGHLIGHT)
-	#棋盘横向阴影
-	draw_rect(Rect2(boardStartPoint, Vector2(boardWidth, boardBevelThickness)), COLOR_SHADOW)
-	#棋盘纵向阴影
-	draw_rect(Rect2(boardStartPoint, Vector2(boardBevelThickness, boardHeight)), COLOR_SHADOW)
-	
+	#棋盘（同样左下角、右上角 45° 斜切衔接）
+	_draw_panel_bevel(boardStartPoint, Vector2(boardWidth, boardHeight), boardBevelThickness)
+
+
+# 绘制一块凸起面板的边框：
+# 上/左 亮色(阴影)，下/右 亮色(高光)。在「左下角」和「右上角」这两处
+# 阴影条与高光条相接的角落，用 45° 斜边衔接，而不是两个矩形直接直角覆盖。
+func _draw_panel_bevel(p: Vector2, size: Vector2, bevel: int) -> void:
+	var x0: float = p.x
+	var y0: float = p.y
+	var x1: float = p.x + size.x
+	var y1: float = p.y + size.y
+	var b: float = float(bevel)
+
+	# 顶部阴影条（右上角 45° 斜切）
+	draw_colored_polygon(PackedVector2Array([
+		Vector2(x0, y0),
+		Vector2(x1, y0),
+		Vector2(x1 - b, y0 + b),
+		Vector2(x0, y0 + b),
+	]), COLOR_SHADOW)
+
+	# 左侧阴影条（左下角 45° 斜切）
+	draw_colored_polygon(PackedVector2Array([
+		Vector2(x0, y0),
+		Vector2(x0 + b, y0),
+		Vector2(x0 + b, y1 - b),
+		Vector2(x0, y1),
+	]), COLOR_SHADOW)
+
+	# 底部高光条（左下角 45° 斜切）
+	draw_colored_polygon(PackedVector2Array([
+		Vector2(x0 + b, y1 - b),
+		Vector2(x1, y1 - b),
+		Vector2(x1, y1),
+		Vector2(x0, y1),
+	]), COLOR_HIGHLIGHT)
+
+	# 右侧高光条（右上角 45° 斜切）
+	draw_colored_polygon(PackedVector2Array([
+		Vector2(x1, y1),
+		Vector2(x1 - b, y1),
+		Vector2(x1 - b, y0 + b),
+		Vector2(x1, y0),
+	]), COLOR_HIGHLIGHT)
