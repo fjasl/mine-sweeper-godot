@@ -1,15 +1,22 @@
 extends Node2D
-class_name Board
-
 @onready var mines: Mines = $Mines
+@onready var cursor: Cursor = $CursorOverlay
 
-func _ready() -> void:
+var cursor_cell := Vector2i.ZERO
+
+func _ready():
 	mines.start_game()
+	cursor.setup(mines)
+	cursor.set_cell(cursor_cell)          # 初始在 (0,0)
 
-func _unhandled_input(event: InputEvent) -> void:
-	if event is InputEventMouseButton and event.pressed:
-		var cell := mines.local_to_map(mines.get_local_mouse_position())
-		if not mines.in_bounds(cell): return
-		match event.button_index:
-			MOUSE_BUTTON_LEFT:  mines.reveal(cell)
-			MOUSE_BUTTON_RIGHT: mines.toggle_flag(cell)
+func _process(_dt):
+	var dir := Vector2i.ZERO
+	if Input.is_action_just_pressed("move_left"):  dir.x -= 1
+	if Input.is_action_just_pressed("move_right"): dir.x += 1
+	if Input.is_action_just_pressed("move_up"):    dir.y -= 1
+	if Input.is_action_just_pressed("move_down"):  dir.y += 1
+	if dir != Vector2i.ZERO:
+		cursor_cell = (cursor_cell + dir).clamp(Vector2i.ZERO, Vector2i(mines.cols - 1, mines.rows - 1))
+		cursor.set_cell(cursor_cell)
+	if Input.is_action_just_pressed("action_a"): mines.reveal(cursor_cell)
+	if Input.is_action_just_pressed("action_b"): mines.toggle_flag(cursor_cell)
