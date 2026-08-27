@@ -1,0 +1,32 @@
+[gd_scene format=3 uid="uid://d1y66c6t0koti"]
+
+[ext_resource type="Script" uid="uid://dafd5nl5bycp2" path="res://UnitTest/board.gd" id="1_g4f5c"]
+[ext_resource type="Texture2D" uid="uid://blu4fcwhq8sc1" path="res://Asset/blocks.bmp" id="2_3gt6m"]
+
+[sub_resource type="TileSetAtlasSource" id="TileSetAtlasSource_v8t1f"]
+texture = ExtResource("2_3gt6m")
+0:0/0 = 0
+0:1/0 = 0
+0:2/0 = 0
+0:3/0 = 0
+0:4/0 = 0
+0:5/0 = 0
+0:6/0 = 0
+0:7/0 = 0
+0:8/0 = 0
+0:9/0 = 0
+0:10/0 = 0
+0:11/0 = 0
+0:12/0 = 0
+0:13/0 = 0
+0:14/0 = 0
+0:15/0 = 0
+
+[sub_resource type="TileSet" id="TileSet_ro8xa"]
+sources/0 = SubResource("TileSetAtlasSource_v8t1f")
+
+[node name="Board" type="Node2D" unique_id=1465599577]
+script = ExtResource("1_g4f5c")
+
+[node name="Mines" type="TileMapLayer" parent="." unique_id=957408129]
+tile_set = SubResource("TileSet_ro8xa")

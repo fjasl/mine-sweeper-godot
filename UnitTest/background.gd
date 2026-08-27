@@ -32,6 +32,20 @@ func board_size() -> Vector2:
 	var totalHeight: int = outerHighlightThickness + middleTopBorderThickness + scoreboardBevelThickness + scoreboardHeight + scoreboardBevelThickness + middleCenterBorderThickness + boardBevelThickness + cellSize * boardRows + boardBevelThickness + middleBottomBorderThickness
 	return Vector2(totalWidth, totalHeight)
 
+func board_grid_origin() -> Vector2:
+	# 棋盘面板左上角
+	var board_start := Vector2(
+		outerHighlightThickness + leftBorderThickness,
+		outerHighlightThickness + middleTopBorderThickness + scoreboardHeight + middleCenterBorderThickness
+	)
+	# 面板往内缩一个 bevel 厚度，才是第一格(0,0)的位置
+	return board_start + Vector2(boardBevelThickness, boardBevelThickness)
+	
+
+func setup_board(board: Node2D) -> void:
+	board.position = board_grid_origin()
+
+
 # 把整块棋盘平移到当前视口中心
 func center_in_viewport() -> void:
 	var viewport_size: Vector2 = get_viewport_rect().size

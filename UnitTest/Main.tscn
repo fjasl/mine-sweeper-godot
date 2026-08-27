@@ -3,6 +3,7 @@
 [ext_resource type="Script" uid="uid://djcmeni3g5f2l" path="res://UnitTest/background.gd" id="1_7b1y1"]
 [ext_resource type="Script" uid="uid://cllw4hhwrgo4t" path="res://UnitTest/main.gd" id="1_ydgul"]
 [ext_resource type="Script" uid="uid://dc8iva4vtllhp" path="res://UnitTest/camera_2d.gd" id="2_gm1ts"]
+[ext_resource type="PackedScene" uid="uid://d1y66c6t0koti" path="res://UnitTest/board.tscn" id="3_41rri"]
 
 [node name="Main" type="Node2D" unique_id=289937505]
 script = ExtResource("1_ydgul")
@@ -10,6 +11,8 @@ script = ExtResource("1_ydgul")
 [node name="Background" type="Node2D" parent="." unique_id=105807495]
 position = Vector2(640, 360)
 script = ExtResource("1_7b1y1")
+
+[node name="Board" parent="Background" unique_id=1465599577 instance=ExtResource("3_41rri")]
 
 [node name="Camera2D" type="Camera2D" parent="." unique_id=1105508075]
 position = Vector2(640, 360)
