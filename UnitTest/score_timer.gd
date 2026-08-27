@@ -34,6 +34,7 @@ func set_number(n: int) -> void:
 
 func start() -> void: elapsed = 0.0; running = true; set_number(0)
 func stop() -> void: running = false
+func reset() -> void: elapsed = 0.0; running = false; set_number(0)   # 重开:回到 0 且不计时
 
 func display_size() -> Vector2:
 	return Vector2(2 * (tile_w + gap_px) + tile_w, tile_h)

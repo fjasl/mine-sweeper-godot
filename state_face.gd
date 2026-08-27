@@ -1,6 +1,8 @@
 extends Node2D
 class_name Smiley
 
+signal restart_requested
+
 # button.bmp 单个脸的实际像素(改成你的)
 @export var frame_w := 24.0
 @export var frame_h := 24.0
@@ -15,6 +17,7 @@ const STATE := {
 
 # 一个 Sprite2D 子节点: texture = button.bmp, region_enabled = true
 @onready var face: Sprite2D = $Face
+var _state := "normal"
 
 func _ready() -> void:
 	if face:
@@ -24,6 +27,7 @@ func _ready() -> void:
 
 # 名字对应 STATE 的键: "normal" / "win" / "lose"
 func set_state(name: String) -> void:
+	_state = name
 	var atlas: Vector2i = STATE[name]
 	face.region_rect = Rect2(atlas.x * frame_w, atlas.y * frame_h, frame_w, frame_h)
 

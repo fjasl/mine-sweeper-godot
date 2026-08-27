@@ -1,6 +1,11 @@
 extends TileMapLayer
 class_name Mines
 
+signal started                    # 第一次翻开后开始
+signal flags_changed(remaining: int)   # 剩余雷数变化
+signal won
+signal lost
+
 @export var cols := 30
 @export var rows := 16
 @export var mine_count := 60
@@ -65,14 +70,17 @@ func reveal(cell: Vector2i) -> void:
 	if game_over: return
 	var st: Dictionary = cells[cell]
 	if st["visit"] or st["mark"] != 0: return
+	var first := revealed_count == 0
 	if st["mine"]:
-		if revealed_count == 0:
+		if first:
 			_relocate_mine(cell)          # 第一步踩雷：把雷挪走
 		else:
 			set_cell(cell, 0, TILE["mine_hit"])
 			_game_over(false, cell)  
 			return
 	_step_box(cell)
+	if first:
+		started.emit()
 	if revealed_count == reveal_target:
 		_game_over(true)
 
@@ -91,6 +99,7 @@ func toggle_flag(cell: Vector2i) -> void:
 		_:
 			st["mark"] = 0
 			set_cell(cell, 0, TILE["covered"])
+	flags_changed.emit(remaining_mines())
 
 # 双击已翻开的数字：周围旗数==数字时翻开周围（对应 StepBlock）
 func chord(cell: Vector2i) -> void:
@@ -159,13 +168,15 @@ func _relocate_mine(cell: Vector2i) -> void:
 	cells[cell]["mine"] = false
 	cells[t]["mine"] = true
 
-func _game_over(won: bool, hit: Vector2i = Vector2i(-1, -1)) -> void:
+func _game_over(win: bool, hit: Vector2i = Vector2i(-1, -1)) -> void:
 	if game_over: return
 	game_over = true
-	if won:
+	if win:
 		for c in cells:
 			if cells[c]["mine"]:
 				set_cell(c, 0, TILE["flag"])
+		flags_changed.emit(0)          # 全部雷已标,剩余 0
+		won.emit()
 	else:
 		for c in cells:
 			var st: Dictionary = cells[c]
@@ -175,4 +186,12 @@ func _game_over(won: bool, hit: Vector2i = Vector2i(-1, -1)) -> void:
 				set_cell(c, 0, TILE["mine"])
 			elif st["mark"] == 1 and not st["mine"]:
 				set_cell(c, 0, TILE["wrong_flag"])
-	print("WIN" if won else "LOSE")
+		flags_changed.emit(remaining_mines())
+		lost.emit()
+
+# 剩余雷数 = 总雷数 - 已插旗数
+func remaining_mines() -> int:
+	var f := 0
+	for c in cells:
+		if cells[c]["mark"] == 1: f += 1
+	return mine_count - f

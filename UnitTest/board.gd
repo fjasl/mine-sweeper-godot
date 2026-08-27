@@ -1,6 +1,11 @@
 extends Node2D
 class_name Board
 
+signal started
+signal flags_changed(remaining: int)
+signal won
+signal lost
+
 @onready var mines: Mines = $Mines
 @onready var cursor: Cursor = $CursorOverlay
 
@@ -10,6 +15,11 @@ func _ready() -> void:
 	mines.start_game()
 	cursor.setup(mines)
 	cursor.set_cell(cursor_cell)
+	# 把 mines 的信号转发成 Board 的信号
+	mines.started.connect(func(): started.emit())
+	mines.flags_changed.connect(func(r): flags_changed.emit(r))
+	mines.won.connect(func(): won.emit())
+	mines.lost.connect(func(): lost.emit())
 
 func _unhandled_input(event: InputEvent) -> void:
 	# 移动光标：方向键 / 手柄 dpad
