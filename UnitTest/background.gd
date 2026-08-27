@@ -1,4 +1,5 @@
 extends Node2D
+class_name Background
 
 @export var centerInViewport: bool = true
 
@@ -40,13 +41,14 @@ func board_grid_origin() -> Vector2:
 	)
 	# 面板往内缩一个 bevel 厚度，才是第一格(0,0)的位置
 	return board_start + Vector2(boardBevelThickness, boardBevelThickness)
-	
-
-func setup_board(board: Node2D) -> void:
-	board.position = board_grid_origin()
 
 
-# 把整块棋盘平移到当前视口中心
+func scoreboard_rect() -> Rect2:
+	var totalWidth := board_size().x
+	var sp := Vector2(outerHighlightThickness + leftBorderThickness,
+		outerHighlightThickness + middleTopBorderThickness)
+	return Rect2(sp, Vector2(totalWidth - outerHighlightThickness - leftBorderThickness - rightBorderThickness, scoreboardHeight))
+
 func center_in_viewport() -> void:
 	var viewport_size: Vector2 = get_viewport_rect().size
 	position = (viewport_size - board_size()) / 2.0

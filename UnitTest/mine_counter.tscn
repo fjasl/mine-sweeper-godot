@@ -1,0 +1,22 @@
+[gd_scene format=3 uid="uid://ctii1w0xso3aj"]
+
+[ext_resource type="Script" uid="uid://db4incio203u5" path="res://mine_counter.gd" id="1_l1qjv"]
+[ext_resource type="Texture2D" uid="uid://bkhkjnfatb32f" path="res://Asset/led.bmp" id="2_17vvd"]
+
+[node name="MineCounter" type="Node2D" unique_id=460550401]
+script = ExtResource("1_l1qjv")
+
+[node name="D0" type="Sprite2D" parent="." unique_id=1229804577]
+texture = ExtResource("2_17vvd")
+region_enabled = true
+region_rect = Rect2(0, 0, 13, 23)
+
+[node name="D1" type="Sprite2D" parent="." unique_id=1902369637]
+texture = ExtResource("2_17vvd")
+region_enabled = true
+region_rect = Rect2(0, 0, 13, 23)
+
+[node name="D2" type="Sprite2D" parent="." unique_id=1928230723]
+texture = ExtResource("2_17vvd")
+region_enabled = true
+region_rect = Rect2(0, 0, 13, 23)

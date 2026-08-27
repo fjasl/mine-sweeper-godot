@@ -1,0 +1,12 @@
+[gd_scene format=3 uid="uid://hjljqr3jiy3b"]
+
+[ext_resource type="Script" uid="uid://dkmlwy66vjcrg" path="res://state_face.gd" id="1_0gx1o"]
+[ext_resource type="Texture2D" uid="uid://rcbfbcp5ogb8" path="res://Asset/button.bmp" id="2_mpyns"]
+
+[node name="StateFace" type="Node2D" unique_id=2064482928]
+script = ExtResource("1_0gx1o")
+
+[node name="Face" type="Sprite2D" parent="." unique_id=542039370]
+texture = ExtResource("2_mpyns")
+region_enabled = true
+region_rect = Rect2(0, 0, 24, 24)
