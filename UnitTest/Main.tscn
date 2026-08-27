@@ -1,0 +1,8 @@
+[gd_scene format=3 uid="uid://deq4ijgs2kxpx"]
+
+[ext_resource type="Script" uid="uid://djcmeni3g5f2l" path="res://UnitTest/background.gd" id="1_7b1y1"]
+
+[node name="Main" type="Node2D" unique_id=289937505]
+
+[node name="Background" type="Node2D" parent="." unique_id=105807495]
+script = ExtResource("1_7b1y1")
