@@ -2,6 +2,7 @@
 
 [ext_resource type="Texture2D" uid="uid://hbmkaryryjay" path="res://Asset/gear.svg" id="1_fyqef"]
 [ext_resource type="Script" uid="uid://bxrcjw04fmruu" path="res://settings_panel.gd" id="2_m6e0p"]
+[ext_resource type="Script" path="res://game_over_panel.gd" id="3_gop"]
 
 [node name="UILayer" type="CanvasLayer" unique_id=1560602418]
 
@@ -23,3 +24,8 @@ stretch_mode = 0
 layout_mode = 3
 anchors_preset = 0
 script = ExtResource("2_m6e0p")
+
+[node name="GameOverPanel" type="Control" parent="." unique_id=1940676269]
+layout_mode = 3
+anchors_preset = 0
+script = ExtResource("3_gop")

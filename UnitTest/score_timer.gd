@@ -1,6 +1,8 @@
 extends Node2D
 class_name ScoreTimer
 
+signal ticked   # 每过 1 秒触发一次
+
 # LED 图里单个数字瓦片的尺寸(改成你实际的)
 @export var tile_w := 13.0
 @export var tile_h := 23.0
@@ -10,6 +12,7 @@ class_name ScoreTimer
 
 var elapsed := 0.0
 var running := false
+var _last_sec := -1
 
 func _ready() -> void:
 	if d[0].texture == null:
@@ -22,7 +25,11 @@ func _ready() -> void:
 func _process(delta: float) -> void:
 	if running:
 		elapsed += delta
-		set_number(int(elapsed))
+		var sec := int(elapsed)
+		if sec != _last_sec:
+			_last_sec = sec
+			set_number(sec)
+			ticked.emit()
 
 func set_number(n: int) -> void:
 	n = clampi(n, 0, 999)
@@ -32,9 +39,9 @@ func set_number(n: int) -> void:
 		var r := Rect2(0, (11 - digits[i]) * tile_h, tile_w, tile_h)
 		d[i].region_rect = r
 
-func start() -> void: elapsed = 0.0; running = true; set_number(0)
+func start() -> void: elapsed = 0.0; running = true; _last_sec = -1; set_number(0)
 func stop() -> void: running = false
-func reset() -> void: elapsed = 0.0; running = false; set_number(0)   # 重开:回到 0 且不计时
+func reset() -> void: elapsed = 0.0; running = false; _last_sec = -1; set_number(0)   # 重开:回到 0 且不计时
 
 func display_size() -> Vector2:
 	return Vector2(2 * (tile_w + gap_px) + tile_w, tile_h)

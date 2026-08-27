@@ -6,7 +6,36 @@ signal apply_settings(cols: int, rows: int, mine_count: int, cursor_color: Color
 var _col_spin: SpinBox
 var _row_spin: SpinBox
 var _mine_spin: SpinBox
+var _color_swatch: ColorRect
 var _color_btn: ColorPickerButton
+var _apply_btn: Button
+var _close_btn: Button
+var _controls: Array = []
+var _sel := 0
+var _color_idx := 0
+var _color := Color(1, 0.9, 0.3)   # 当前光标颜色(预设或自定义共用)
+
+# 预设光标颜色（手柄左右循环）
+const PALETTE := [
+	Color(1, 0.9, 0.3),     # 黄
+	Color(1, 0.75, 0.2),    # 橙
+	Color(1, 0.5, 0.2),     # 橙红
+	Color(1, 0.3, 0.3),     # 红
+	Color(1, 0.35, 0.6),    # 玫红
+	Color(1, 0.4, 1),       # 品红
+	Color(0.8, 0.4, 1),     # 紫
+	Color(0.55, 0.4, 1),    # 蓝紫
+	Color(0.35, 0.5, 1),    # 蓝
+	Color(0.3, 0.75, 1),    # 天蓝
+	Color(0.3, 1, 1),       # 青
+	Color(0.2, 0.9, 0.6),   # 蓝绿
+	Color(0.3, 1, 0.4),     # 绿
+	Color(0.65, 1, 0.3),    # 黄绿
+	Color(1, 1, 1),         # 白
+	Color(0.8, 0.8, 0.8),   # 浅灰
+	Color(0.5, 0.5, 0.5),   # 中灰
+	Color(0.25, 0.25, 0.25),# 深灰
+]
 
 func _ready() -> void:
 	# 左半屏抽屉：宽=屏幕一半, 高=全屏, 贴左
@@ -19,12 +48,10 @@ func _ready() -> void:
 	hide()
 
 func _build_ui() -> void:
-	# 灰色面板铺满自己(左半屏)
 	var panel := Panel.new()
 	panel.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	add_child(panel)
 
-	# 内容：上到下排
 	var vb := VBoxContainer.new()
 	vb.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	var m := 24.0
@@ -44,17 +71,27 @@ func _build_ui() -> void:
 	var color_row := HBoxContainer.new()
 	vb.add_child(color_row)
 	var cl := Label.new(); cl.text = "光标颜色"; color_row.add_child(cl)
+	_color_swatch = ColorRect.new()
+	_color_swatch.custom_minimum_size = Vector2(44, 22)
+	_color_swatch.color = _color
+	_color_swatch.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	color_row.add_child(_color_swatch)
 	_color_btn = ColorPickerButton.new()
-	_color_btn.color = Color(1, 0.9, 0.3)
-	_color_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_color_btn.color = _color
 	color_row.add_child(_color_btn)
+	_color_btn.color_changed.connect(_set_color)   # 自定义颜色(鼠标/手柄弹窗)
 
 	var btns := HBoxContainer.new()
 	vb.add_child(btns)
-	var apply := Button.new(); apply.text = "应用"; btns.add_child(apply)
-	apply.pressed.connect(_on_apply)
-	var close := Button.new(); close.text = "关闭"; btns.add_child(close)
-	close.pressed.connect(_close)
+	_apply_btn = Button.new(); _apply_btn.text = "应用"; btns.add_child(_apply_btn)
+	_apply_btn.pressed.connect(_on_apply)
+	_close_btn = Button.new(); _close_btn.text = "关闭"; btns.add_child(_close_btn)
+	_close_btn.pressed.connect(close)
+
+	# 手柄可聚焦项
+	_controls = [_col_spin, _row_spin, _mine_spin, _color_swatch, _color_btn, _apply_btn, _close_btn]
+	for c in _controls:
+		c.focus_mode = Control.FOCUS_ALL
 
 func _add_spin_row(parent, label: String, val: int, vmin: int, vmax: int) -> SpinBox:
 	var row := HBoxContainer.new()
@@ -73,8 +110,9 @@ func open() -> void:
 	var t := create_tween()
 	t.tween_property(self, "position:x", 0.0, 0.25)\
 		.set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
+	_goto(0)   # 聚焦第一项
 
-func _close() -> void:
+func close() -> void:
 	var t := create_tween()
 	t.tween_property(self, "position:x", -get_viewport_rect().size.x * 0.5, 0.2)\
 		.set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_IN)
@@ -83,5 +121,46 @@ func _close() -> void:
 func _on_apply() -> void:
 	apply_settings.emit(
 		int(_col_spin.value), int(_row_spin.value),
-		int(_mine_spin.value), _color_btn.color)
-	_close()
+		int(_mine_spin.value), _color)
+	close()
+
+func _set_color(c: Color) -> void:
+	_color = c
+	_color_swatch.color = c
+
+# ---- 手柄导航 ----
+func _unhandled_input(event: InputEvent) -> void:
+	if not visible: return
+	if event.is_action_pressed("move_down"):
+		_goto(_sel + 1)
+	elif event.is_action_pressed("move_up"):
+		_goto(_sel - 1)
+	elif event.is_action_pressed("move_left"):
+		_adjust(-1)
+	elif event.is_action_pressed("move_right"):
+		_adjust(1)
+	elif event.is_action_pressed("action_a"):
+		_activate()
+	elif event.is_action_pressed("action_b"):
+		close()
+
+func _goto(i: int) -> void:
+	_sel = wrapi(i, 0, _controls.size())
+	_controls[_sel].grab_focus()
+
+func _adjust(dir: int) -> void:
+	var c = _controls[_sel]
+	if c is SpinBox:
+		c.value += dir
+	elif c == _color_swatch or c == _color_btn:
+		_color_idx = wrapi(_color_idx + dir, 0, PALETTE.size())
+		_set_color(PALETTE[_color_idx])
+
+func _activate() -> void:
+	var c = _controls[_sel]
+	if c == _apply_btn:
+		_on_apply()
+	elif c == _close_btn:
+		close()
+	elif c == _color_btn:
+		c.get_popup().popup()   # 手柄按 A 弹完整调色板

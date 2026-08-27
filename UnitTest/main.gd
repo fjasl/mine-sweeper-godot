@@ -9,6 +9,7 @@ extends Node2D
 @onready var face = $Background/StateFace
 @onready var settings_btn = $UILayer/SettingsButton
 @onready var settings_panel = $UILayer/SettingsPanel
+@onready var game_over_panel = $UILayer/GameOverPanel
 
 # Called when the node enters the scene tree for the first time.
 func _ready() -> void:
@@ -25,14 +26,29 @@ func _ready() -> void:
 	# board 的信号 → UI
 	board.started.connect(func(): timer.start())
 	board.flags_changed.connect(func(r): counter.set_number(r))
+	# 计时器每跳一秒 → 滴答声
+	timer.ticked.connect(func(): CoreSystem.audio_manager.play_sound("res://Asset/tick.wav"))
 	board.won.connect(func():
 		timer.stop()
 		face.set_state("win")
+		game_over_panel.show_result(true)
+		CoreSystem.audio_manager.play_sound("res://Asset/win.wav")
 	)
 	board.lost.connect(func():
 		timer.stop()
 		face.set_state("lose")
+		game_over_panel.show_result(false)
+		CoreSystem.audio_manager.play_sound("res://Asset/explode.wav")
 	)
+
+	# 再来一次
+	game_over_panel.play_again.connect(func():
+		_restart()
+		game_over_panel.hide_result()
+	)
+
+	# 背景音乐(项目里没有 bgm.ogg;如果加进了 Asset 就启用下面这行)
+	# CoreSystem.audio_manager.play_music("res://Asset/bgm.ogg", 0.0)
 
 	# 开局显示剩余雷数
 	counter.set_number(board.mines.remaining_mines())
@@ -40,8 +56,15 @@ func _ready() -> void:
 	# 输掉后点表情 → 重开
 	face.restart_requested.connect(_restart)
 	
-	settings_btn.pressed.connect(func(): settings_panel.open())
+	settings_btn.pressed.connect(func():
+		if settings_panel.visible:
+			settings_panel.close()
+		else:
+			settings_panel.open())
 	settings_panel.apply_settings.connect(_apply_settings)
+	# 设置面板打开时,屏蔽棋盘输入(手柄导航给面板用)
+	settings_panel.visibility_changed.connect(func():
+		board.set_process_unhandled_input(not settings_panel.visible))
 
 
 func _restart() -> void:
@@ -68,6 +91,19 @@ func _apply_settings(cols: int, rows: int, mine_count: int, cursor_color: Color)
 	rows = clampi(rows, 9, 24)
 	mine_count = clampi(mine_count, 1, cols * rows - 1)   # 至少 1 颗,最多 格子数-1
 
+	# 光标颜色：总是生效
+	board.cursor.color = cursor_color
+	board.cursor.queue_redraw()
+
+	# 只改颜色 → 不用重新开局,直接返回
+	var changed: bool = (
+		cols != board.mines.cols or
+		rows != board.mines.rows or
+		mine_count != board.mines.mine_count
+	)
+	if not changed:
+		return
+
 	# 1) 棋盘格数/雷数：改 mines + background,然后重开
 	board.mines.cols = cols
 	board.mines.rows = rows
@@ -87,6 +123,13 @@ func _apply_settings(cols: int, rows: int, mine_count: int, cursor_color: Color)
 	background.queue_redraw()
 	cam.position = background.position + background.board_size() / 2.0
 
-	# 3) 光标颜色
-	board.cursor.color = cursor_color
-	board.cursor.queue_redraw()
+# new_game 输入 → 结束后重开
+func _unhandled_input(event: InputEvent) -> void:
+	if event.is_action_pressed("new_game"):
+		_restart()
+		if game_over_panel: game_over_panel.hide_result()
+	elif event.is_action_pressed("setting_pane"):
+		if settings_panel.visible:
+			settings_panel.close()
+		else:
+			settings_panel.open()

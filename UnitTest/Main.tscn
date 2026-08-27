@@ -29,3 +29,5 @@ position = Vector2(640, 360)
 script = ExtResource("2_gm1ts")
 
 [node name="UILayer" parent="." unique_id=1560602418 instance=ExtResource("8_sus66")]
+
+[node name="AudioStreamPlayer" type="AudioStreamPlayer" parent="." unique_id=1123533517]
