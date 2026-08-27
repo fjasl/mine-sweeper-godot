@@ -44,6 +44,7 @@ func start_game() -> void:
 	_place_mines()
 	fill_covered()
 
+
 func fill_covered() -> void:
 	for x in cols:
 		for y in rows:
