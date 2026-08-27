@@ -2,6 +2,7 @@
 
 [ext_resource type="Script" uid="uid://dafd5nl5bycp2" path="res://UnitTest/board.gd" id="1_g4f5c"]
 [ext_resource type="Texture2D" uid="uid://blu4fcwhq8sc1" path="res://Asset/blocks.bmp" id="2_3gt6m"]
+[ext_resource type="Script" uid="uid://3jke4n2ayufq" path="res://UnitTest/mines.gd" id="3_3gt6m"]
 
 [sub_resource type="TileSetAtlasSource" id="TileSetAtlasSource_v8t1f"]
 texture = ExtResource("2_3gt6m")
@@ -30,3 +31,4 @@ script = ExtResource("1_g4f5c")
 
 [node name="Mines" type="TileMapLayer" parent="." unique_id=957408129]
 tile_set = SubResource("TileSet_ro8xa")
+script = ExtResource("3_3gt6m")
