@@ -42,6 +42,17 @@ func board_grid_origin() -> Vector2:
 	# 面板往内缩一个 bevel 厚度，才是第一格(0,0)的位置
 	return board_start + Vector2(boardBevelThickness, boardBevelThickness)
 
+func place_display(display, side: String, inset: float) -> Vector2:
+	var rect = scoreboard_rect()
+	var tsize = display.display_size()
+	var y = rect.position.y + (rect.size.y - tsize.y) / 2.0
+	var x
+	match side:
+		"right":  x = rect.position.x + rect.size.x - inset - tsize.x
+		"left":   x = rect.position.x + inset
+		"center": x = rect.position.x + (rect.size.x - tsize.x) / 2.0
+	return Vector2(x, y)
+
 
 func scoreboard_rect() -> Rect2:
 	var totalWidth := board_size().x

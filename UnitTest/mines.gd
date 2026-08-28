@@ -83,7 +83,7 @@ func reveal(cell: Vector2i) -> void:
 	if first:
 		started.emit()
 	if revealed_count == reveal_target:
-		_game_over(true)
+		_game_over(true, cell)
 
 # 右键：旗→问号→取消（对应 MakeGuess，去掉偏好只留循环）
 func toggle_flag(cell: Vector2i) -> void:

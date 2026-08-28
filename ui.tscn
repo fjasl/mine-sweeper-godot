@@ -2,7 +2,7 @@
 
 [ext_resource type="Texture2D" uid="uid://hbmkaryryjay" path="res://Asset/gear.svg" id="1_fyqef"]
 [ext_resource type="Script" uid="uid://bxrcjw04fmruu" path="res://settings_panel.gd" id="2_m6e0p"]
-[ext_resource type="Script" path="res://game_over_panel.gd" id="3_gop"]
+[ext_resource type="Script" uid="uid://othjnlkno6ii" path="res://game_over_panel.gd" id="3_gop"]
 
 [node name="UILayer" type="CanvasLayer" unique_id=1560602418]
 

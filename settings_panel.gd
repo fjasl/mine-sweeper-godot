@@ -9,11 +9,16 @@ var _mine_spin: SpinBox
 var _color_swatch: ColorRect
 var _color_btn: ColorPickerButton
 var _apply_btn: Button
+var _restart_btn: Button
 var _close_btn: Button
 var _controls: Array = []
 var _sel := 0
 var _color_idx := 0
 var _color := Color(1, 0.9, 0.3)   # 当前光标颜色(预设或自定义共用)
+
+var restart_func: Callable = Callable()
+
+
 
 # 预设光标颜色（手柄左右循环）
 const PALETTE := [
@@ -36,6 +41,9 @@ const PALETTE := [
 	Color(0.5, 0.5, 0.5),   # 中灰
 	Color(0.25, 0.25, 0.25),# 深灰
 ]
+
+func set_restart_func(callback: Callable):
+	restart_func = callback
 
 func _ready() -> void:
 	# 左半屏抽屉：宽=屏幕一半, 高=全屏, 贴左
@@ -75,9 +83,13 @@ func _build_ui() -> void:
 	_color_swatch.custom_minimum_size = Vector2(44, 22)
 	_color_swatch.color = _color
 	_color_swatch.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_color_swatch.size_flags_stretch_ratio = 9   # ← 占 9 份
 	color_row.add_child(_color_swatch)
 	_color_btn = ColorPickerButton.new()
 	_color_btn.color = _color
+	_color_btn.custom_minimum_size = Vector2(80, 28)   # ← 设置最小尺寸
+	_color_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL  # ← 可选：让它也扩展
+	_color_btn.size_flags_stretch_ratio = 1    # ← 占 1 份
 	color_row.add_child(_color_btn)
 	_color_btn.color_changed.connect(_set_color)   # 自定义颜色(鼠标/手柄弹窗)
 
@@ -85,6 +97,8 @@ func _build_ui() -> void:
 	vb.add_child(btns)
 	_apply_btn = Button.new(); _apply_btn.text = "应用"; btns.add_child(_apply_btn)
 	_apply_btn.pressed.connect(_on_apply)
+	_restart_btn = Button.new(); _restart_btn.text = "重启"; btns.add_child(_restart_btn)
+	_restart_btn.pressed.connect(restart)
 	_close_btn = Button.new(); _close_btn.text = "关闭"; btns.add_child(_close_btn)
 	_close_btn.pressed.connect(close)
 
@@ -117,6 +131,9 @@ func close() -> void:
 	t.tween_property(self, "position:x", -get_viewport_rect().size.x * 0.5, 0.2)\
 		.set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_IN)
 	t.tween_callback(hide)
+	
+func restart() -> void:
+	restart_func.call()
 
 func _on_apply() -> void:
 	apply_settings.emit(

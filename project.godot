@@ -13,9 +13,6 @@ config_version=5
 config/name="MineSweeper"
 run/main_scene="uid://deq4ijgs2kxpx"
 config/features=PackedStringArray("4.7", "Mobile")
-config/icon="res://Asset/winmine.ico"
-config/macos_native_icon="res://Asset/winmine.ico"
-config/windows_native_icon="res://Asset/winmine.ico"
 
 [autoload]
 
@@ -25,8 +22,8 @@ CoreSystem="*uid://cbspmadydncps"
 
 window/size/viewport_width=1280
 window/size/viewport_height=720
-window/size/initial_position_type=0
-window/stretch/mode="viewport"
+window/size/mode=2
+window/stretch/mode="canvas_items"
 
 [editor_plugins]
 
