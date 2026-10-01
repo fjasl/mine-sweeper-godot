@@ -16,6 +16,11 @@ var _sel := 0
 var _color_idx := 0
 var _color := Color(1, 0.9, 0.3)   # 当前光标颜色(预设或自定义共用)
 
+# "面板该不该开着"的唯一真相(意图)。刻意不用 visible：那是动画的结果，
+# 而且面板会自己关自己(_on_apply / 关闭按钮 / 手柄 B)，意图只能由自己维护
+var _want_open := false
+var _tween: Tween                  # 当前滑入/滑出动画，重开前必须先 kill
+
 var restart_func: Callable = Callable()
 
 
@@ -72,9 +77,13 @@ func _build_ui() -> void:
 	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
 	vb.add_child(title)
 
-	_col_spin = _add_spin_row(vb, "列数", 30, 9, 40)
-	_row_spin = _add_spin_row(vb, "行数", 16, 9, 24)
+	# 范围从 Mines 的常量取，避免规则出现第二份副本
+	_col_spin = _add_spin_row(vb, "列数", 30, Mines.MIN_COLS, Mines.MAX_COLS)
+	_row_spin = _add_spin_row(vb, "行数", 16, Mines.MIN_ROWS, Mines.MAX_ROWS)
 	_mine_spin = _add_spin_row(vb, "雷数", 60, 1, 999)
+	_col_spin.value_changed.connect(_sync_mine_max)
+	_row_spin.value_changed.connect(_sync_mine_max)
+	_sync_mine_max(0.0)
 
 	var color_row := HBoxContainer.new()
 	vb.add_child(color_row)
@@ -117,20 +126,42 @@ func _add_spin_row(parent, label: String, val: int, vmin: int, vmax: int) -> Spi
 	row.add_child(s)
 	return s
 
+# 雷数上限跟着 列×行 走，让面板不可能提出非法值(雷不能占满整盘)
+func _sync_mine_max(_v: float) -> void:
+	_mine_spin.max_value = int(_col_spin.value) * int(_row_spin.value) - 1
+
 # 从左边滑入，占到左半屏
 func open() -> void:
+	_want_open = true
+	_kill_tween()
 	show()
 	position.x = -get_viewport_rect().size.x * 0.5   # 先躲到左边外
-	var t := create_tween()
-	t.tween_property(self, "position:x", 0.0, 0.25)\
+	_tween = create_tween()
+	_tween.tween_property(self, "position:x", 0.0, 0.25)\
 		.set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
 	_goto(0)   # 聚焦第一项
 
 func close() -> void:
-	var t := create_tween()
-	t.tween_property(self, "position:x", -get_viewport_rect().size.x * 0.5, 0.2)\
+	_want_open = false
+	_kill_tween()
+	_tween = create_tween()
+	_tween.tween_property(self, "position:x", -get_viewport_rect().size.x * 0.5, 0.2)\
 		.set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_IN)
-	t.tween_callback(hide)
+	_tween.tween_callback(hide)
+
+# 开关的唯一入口：main 只喊这一声，判断依据由面板自己维护。
+# 不能用 visible 判断 —— 它是动画的结果；而且面板会自己关自己(_on_apply/关闭/B)
+func toggle() -> void:
+	if _want_open:
+		close()
+	else:
+		open()
+
+# 重开前必须停掉上一个动画：它在 close() 尾部挂的 hide 回调会在面板重新
+# 打开之后把它藏起来 —— 这是"点两次才打开"的另一半原因
+func _kill_tween() -> void:
+	if _tween and _tween.is_valid():
+		_tween.kill()
 	
 func restart() -> void:
 	restart_func.call()

@@ -10,6 +10,12 @@ signal lost
 @export var rows := 16
 @export var mine_count := 60
 
+# 规格约束：跟着数据走，UI 与逻辑都从这里取
+const MIN_COLS := 9
+const MAX_COLS := 40
+const MIN_ROWS := 9
+const MAX_ROWS := 24
+
 # 你定好的 坐标→状态 映射(用同一张表)
 const TILE := {
 	"covered": Vector2i(0,0), 
@@ -35,8 +41,16 @@ var game_over := false
 var reveal_target := 0
 var revealed_count := 0
 
+# 把一组规格夹到合法范围（含跨字段约束：雷数不能占满整盘）
+static func clamp_spec(c: int, r: int, m: int) -> Vector3i:
+	c = clampi(c, MIN_COLS, MAX_COLS)
+	r = clampi(r, MIN_ROWS, MAX_ROWS)
+	return Vector3i(c, r, clampi(m, 1, c * r - 1))
+
+
 func _ready() -> void:
-	start_game()
+	#start_game()
+	pass
 
 func start_game() -> void:
 	cells.clear()
@@ -68,7 +82,8 @@ func _place_mines() -> void:
 
 # 左键：翻开（对应 StepSquare/StepBox）
 func reveal(cell: Vector2i) -> void:
-	if game_over: return
+	# 兜底：界外坐标直接忽略(改棋盘尺寸后可能残留旧光标坐标)
+	if game_over or not in_bounds(cell): return
 	var st: Dictionary = cells[cell]
 	if st["visit"] or st["mark"] != 0: return
 	var first := revealed_count == 0
@@ -87,7 +102,8 @@ func reveal(cell: Vector2i) -> void:
 
 # 右键：旗→问号→取消（对应 MakeGuess，去掉偏好只留循环）
 func toggle_flag(cell: Vector2i) -> void:
-	if game_over: return
+	# 兜底：界外坐标直接忽略(改棋盘尺寸后可能残留旧光标坐标)
+	if game_over or not in_bounds(cell): return
 	var st: Dictionary = cells[cell]
 	if st["visit"]: return
 	match st["mark"]:
@@ -102,21 +118,21 @@ func toggle_flag(cell: Vector2i) -> void:
 			set_cell(cell, 0, TILE["covered"])
 	flags_changed.emit(remaining_mines())
 
-# 双击已翻开的数字：周围旗数==数字时翻开周围（对应 StepBlock）
-func chord(cell: Vector2i) -> void:
-	if game_over or not cells[cell]["visit"]: return
-	var num := _num(cell)
-	if num == 0 or _flags_around(cell) != num: return
-	for nb in _neighbors(cell):
-		var st: Dictionary = cells[nb]
-		if st["mark"] != 0: continue
-		if st["mine"]:
-			set_cell(nb, 0, TILE["mine_hit"])
-			_game_over(false, nb)  
-			return
-		_step_box(nb)
-	if revealed_count == reveal_target:
-		_game_over(true)
+# 双击已翻开的数字：周围旗数==数字时翻开周围（对应 StepBlock） 暂时不做实现
+#func chord(cell: Vector2i) -> void:
+	#if game_over or not cells[cell]["visit"]: return
+	#var num := _num(cell)
+	#if num == 0 or _flags_around(cell) != num: return
+	#for nb in _neighbors(cell):
+		#var st: Dictionary = cells[nb]
+		#if st["mark"] != 0: continue
+		#if st["mine"]:
+			#set_cell(nb, 0, TILE["mine_hit"])
+			#_game_over(false, nb)  
+			#return
+		#_step_box(nb)
+	#if revealed_count == reveal_target:
+		#_game_over(true)
 
 func in_bounds(c: Vector2i) -> bool:
 	return c.x >= 0 and c.y >= 0 and c.x < cols and c.y < rows
@@ -145,6 +161,7 @@ func _num(c: Vector2i) -> int:
 		if cells[nb]["mine"]: n += 1
 	return n
 
+# 目前仅服务于已注释的 chord()；保留待和弦功能重启时复用
 func _flags_around(c: Vector2i) -> int:
 	var n := 0
 	for nb in _neighbors(c):

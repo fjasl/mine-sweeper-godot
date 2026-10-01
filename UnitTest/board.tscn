@@ -34,5 +34,5 @@ script = ExtResource("1_g4f5c")
 tile_set = SubResource("TileSet_ro8xa")
 script = ExtResource("3_3gt6m")
 
-[node name="CursorOverlay" type="Node2D" parent="." unique_id=199886871]
+[node name="CursorOverlay" type="Node2D" parent="Mines" unique_id=199886871]
 script = ExtResource("4_v8t1f")
