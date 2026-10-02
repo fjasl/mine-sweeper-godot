@@ -180,9 +180,12 @@ func _on_drag_changed(delta: Vector2, _total: Vector2, fingers: int) -> void:
 		return
 	_pending_move += delta                      # 单指：交给 _process 统一应用(带加速)
 
-func _on_drag_ended(_total: Vector2, fingers: int) -> void:
-	if fingers >= 2:
-		_end_pan()
+func _on_drag_ended(_total: Vector2, _fingers: int) -> void:
+	# **不能按 fingers 判断**：drag.gd 只在"手指数归零"时才发 drag_ended，
+	# 而它在此之前已经因为手指数变化 _rebase() 过，_fingers 早被改成 1 了 ——
+	# 于是这里永远是 fingers=1，_end_pan() 从不执行，pan_drag 会一直按着不放。
+	# 收尾一律收；_end_pan() 自己幂等，没在拖时什么都不做。
+	_end_pan()
 
 func _move_pointer(delta: Vector2) -> void:
 	var rect := get_viewport().get_visible_rect()
@@ -298,16 +301,23 @@ func to_world(screen_pos: Vector2) -> Vector2:
 func _pan_camera(delta: Vector2) -> void:
 	if cam == null:
 		return
-	if not _panning:
+	# **以相机自己的状态为准**，不看本地那份副本：
+	# 相机的 _panning 会被别处清掉(失焦时的 _notification、打开设置抽屉时的
+	# set_input_enabled(false))，本地副本却不会。两份一旦分家，这里就会以为
+	# "已经按下了"而**不再补发 pan_drag** —— 表现就是双指平移突然失灵，
+	# 而且只有等两边都归零才会自己好(所以是"常常"而不是"每次都")。
+	if not cam.is_panning():
 		_panning = true
 		_fire_action(&"pan_drag", true)          # 相机靠这个动作锁存"正在拖"
 	_send_motion(to_window(gestures.tracker.centroid()), delta)
 
 func _end_pan() -> void:
-	if _panning:
-		_panning = false
-		_fire_action(&"pan_drag", false)
-		_log("pan end")
+	# 两边**任一**还在"拖"就得松开，否则 pan_drag 会粘住
+	if not _panning and not (cam != null and cam.is_panning()):
+		return
+	_panning = false
+	_fire_action(&"pan_drag", false)
+	_log("pan end")
 
 # ---- 双指捏合 = 缩放 ----
 

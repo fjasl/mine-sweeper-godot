@@ -22,9 +22,12 @@ var _has_zoom_anchor := false
 
 func _process(delta: float) -> void:
 	# 平移：ui_* 内置 action(拖动期间不叠加键盘平移，免得两个来源抢方向)。
-	# 语义：推哪个方向，相机就往那个方向走(视野朝该方向推进)。
+	# **方向是反的**：推右，画面(内容)往右走，所以相机往左移 —— 手感上是"用摇杆推着
+	# 地图走"，而不是"推着镜头走"。
+	# 注意键盘方向键与左摇杆共用 ui_*，所以这里反向会**同时**作用在两者上；
+	# 要只反摇杆、保留键盘，就得把摇杆那一份单独取出来(见下面注释)，不共用这个符号。
 	if _input_enabled and not _panning:
-		position += Input.get_vector("ui_left","ui_right","ui_up","ui_down") * move_speed * delta
+		position -= Input.get_vector("ui_left","ui_right","ui_up","ui_down") * move_speed * delta
 
 	# 缩放：自定义 action，滚轮每滚一格是"刚按下"，用 is_action_just_pressed
 	if _input_enabled:

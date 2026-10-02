@@ -13,6 +13,7 @@ config_version=5
 config/name="MineSweeper"
 run/main_scene="uid://deq4ijgs2kxpx"
 config/features=PackedStringArray("4.7", "Mobile")
+config/icon="res://Asset/app_icon.svg"
 
 [autoload]
 
