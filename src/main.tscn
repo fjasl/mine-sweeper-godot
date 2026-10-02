@@ -9,7 +9,6 @@
 [ext_resource type="PackedScene" uid="uid://hjljqr3jiy3b" path="res://src/state_face.tscn" id="6_lo4dc"]
 [ext_resource type="PackedScene" uid="uid://c2gw8tsk62yka" path="res://ui.tscn" id="8_sus66"]
 [ext_resource type="Script" uid="uid://i1hd07q25m37" path="res://src/touch_bindings.gd" id="9_bind"]
-[ext_resource type="Script" uid="uid://bottb3ks1jl00" path="res://src/pointer_cursor.gd" id="9_cur"]
 [ext_resource type="Script" uid="uid://odmlh7w442hm" path="res://addons/touch_gestures/touch_gestures.gd" id="9_gest"]
 
 [node name="Main" type="Node2D" unique_id=289937505]
@@ -38,11 +37,5 @@ script = ExtResource("9_gest")
 script = ExtResource("9_bind")
 
 [node name="UILayer" parent="." unique_id=1560602418 instance=ExtResource("8_sus66")]
-
-[node name="PointerLayer" type="CanvasLayer" parent="." unique_id=1188061228]
-layer = 2
-
-[node name="PointerCursor" type="Node2D" parent="PointerLayer" unique_id=1188061229]
-script = ExtResource("9_cur")
 
 [node name="AudioStreamPlayer" type="AudioStreamPlayer" parent="." unique_id=1123533517]

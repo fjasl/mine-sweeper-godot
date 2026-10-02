@@ -19,6 +19,9 @@ var cursor_cell := Vector2i.ZERO
 ## 点到的却是上一次残留的那一格"这个坑)
 var _pointer_on_board := true
 
+## 黄框跟随是否被暂停(有 UI 覆盖时为 true)
+var _tracking_paused := false
+
 func _ready() -> void:
 	mines.start_game()
 	cursor.setup(mines)
@@ -39,22 +42,48 @@ func _ready() -> void:
 func _process(_delta: float) -> void:
 	_update_cursor_from_pointer()
 
-## 屏幕(视口)坐标 → 本节点局部坐标。
-## 用**显式两段变换**，不用 make_input_local()：后者的语义是把"已进入视口的
-## 事件"搬进节点空间，对真实鼠标事件成立，但对 Input.parse_input_event() 注入的
-## 合成事件(以及每帧主动换算)并不等价，相机一动结果就偏。
-func _screen_to_local(screen_pos: Vector2) -> Vector2:
-	var world: Vector2 = get_viewport().get_canvas_transform().affine_inverse() * screen_pos
-	return to_local(world)
-
-## 取本帧指针的屏幕坐标：触控板接管时用它，否则用真鼠标
-func _pointer_screen_pos() -> Vector2:
+## 指针的**视口坐标** —— 画布(棋盘/世界)这一侧要的是这个空间。
+## GUI 命中测试要的是窗口坐标(见 pointer_window_pos)，两者差一个拉伸比，
+## 所以必须分开取，不能混用：混用的后果是"控件点得准、棋盘就偏"，或反过来。
+func _pointer_viewport_pos() -> Vector2:
 	if touch != null and touch.is_tracking_pointer():
-		return touch.pointer_screen_pos()
+		return touch.pointer_viewport_pos()
 	return get_viewport().get_mouse_position()
 
+## 视口坐标 → 本节点局部坐标。
+## 直接由**相机状态**推导世界坐标：world = 相机屏幕中心 + (视口点 - 视口中心) / zoom。
+## 刻意不依赖 get_global_mouse_position() 或 get_canvas_transform()：
+## 那两个都要先确定"喂进去的是窗口还是视口坐标"，一旦喂错就整体缩放走样，
+## 而合成事件又确实会改变引擎内部记录的鼠标位置 —— 变量太多。
+## 这里只用三个确定量：相机屏幕中心、zoom、视口矩形。
+func _screen_to_local(viewport_pos: Vector2) -> Vector2:
+	var cam := get_viewport().get_camera_2d()
+	if cam == null:
+		return to_local(viewport_pos)
+	var vis := get_viewport().get_visible_rect()
+	var world := cam.get_screen_center_position() + (viewport_pos - vis.position - vis.size * 0.5) / cam.zoom
+	return to_local(world)
+
+## 暂停/恢复"黄框跟随指针"。
+##
+## 有新局之外的 UI 覆盖时(设置抽屉、结算弹窗)应当暂停：
+## 黄框是"下一击会作用在哪"的指示器，被面板挡着还在背后乱跑只会让人误判。
+## 暂停时用 set_process(false)，所以是真的停下，不是每帧空转。
+##
+## 刻意不把"何时暂停"写死在 Board 里：调用方是 main(菜单开关)与
+## GameStateMachine(对局阶段)，它们才是"当前有没有 UI 覆盖"的知情者。
+func pause_tracking(paused: bool) -> void:
+	_tracking_paused = paused
+	set_process(not paused)
+	if paused:
+		# 冻结期间指针可能一直在界外，恢复时别让界外状态影响第一次点击
+		_pointer_on_board = false
+	else:
+		# 立即对齐一次，免得恢复后要等下一帧才追上指针
+		_update_cursor_from_pointer()
+
 func _update_cursor_from_pointer() -> void:
-	var mc := mines.local_to_map(_screen_to_local(_pointer_screen_pos()))
+	var mc := mines.local_to_map(_screen_to_local(_pointer_viewport_pos()))
 	_pointer_on_board = mines.in_bounds(mc)
 	# 指针在棋盘外(或相机把棋盘移出屏幕)时**什么都不做**：
 	# 保留上一次的合法选中，不夹取、不隐藏 —— 界外移动不该改变内部选中。
@@ -69,11 +98,24 @@ func set_cursor_cell(c: Vector2i) -> void:
 	cursor.set_cell(c)
 
 func _unhandled_input(event: InputEvent) -> void:
+	# 翻开 / 插旗。
+	# 放在方向键判断**之前**：两者可能同时命中同一个手柄按键，
+	# 而"动作"比"移动光标"更该生效(否则一次按下只挪格子、不翻开，看起来就像失效)。
+	# 这里**不看 _pointer_on_board**：那个标志是给"指针点击"用的(指针在棋盘外时
+	# 不该翻到上一次残留的格子)，但 action_a/action_b 同时也绑着手柄 A/B，
+	# 手柄与指针无关 —— 加上这个条件会直接让手柄按 A 失效。
+	if event.is_action_pressed("action_a"):
+		mines.reveal(cursor_cell)
+		get_viewport().set_input_as_handled()
+	elif event.is_action_pressed("action_b"):
+		mines.toggle_flag(cursor_cell)
+		get_viewport().set_input_as_handled()
+
 	# 移动光标：方向键 / 手柄 dpad。
 	# 走 nudge_pointer() 而不是直接改 cursor_cell —— 黄框每帧由指针位置算出来，
 	# 直接改 cursor_cell 会在下一帧被 _process 抹掉。推动指针则一切自洽。
 	# (桌面端 TouchBindings 未接管指针时，dpad 不生效；桌面用鼠标/相机即可)
-	if event.is_action_pressed("move_left"):
+	elif event.is_action_pressed("move_left"):
 		_nudge(Vector2i(-1, 0))
 	elif event.is_action_pressed("move_right"):
 		_nudge(Vector2i(1, 0))
@@ -82,27 +124,17 @@ func _unhandled_input(event: InputEvent) -> void:
 	elif event.is_action_pressed("move_down"):
 		_nudge(Vector2i(0, 1))
 
-	# 翻开 / 插旗（鼠标左/右键 和 手柄 A/B 都绑到了 action_a / action_b）
-	# 注意这里不看事件坐标：黄框已经由 _process 跟到指针所在格，
-	# 点击直接作用于黄框那一格，"点哪开哪"自然成立
-	elif event.is_action_pressed("action_a"):
-		if _pointer_on_board:
-			mines.reveal(cursor_cell)
-	elif event.is_action_pressed("action_b"):
-		if _pointer_on_board:
-			mines.toggle_flag(cursor_cell)
-
-# 按"一格"推动虚拟指针(屏幕像素)。
-# 格子尺寸是世界的像素(如 16×16)，而指针位置是屏幕像素，中间差一个 zoom；
-# 直接用 canvas transform 量一格在屏幕上的长度，这样和上面 _screen_to_local()
-# 用的是同一个变换，不会出现"两套坐标各说各话"。
+# 按"一格"推动虚拟指针。
+# nudge_pointer() 收的是**视口逻辑坐标**(和 pointer_pos 同一个空间)，
+# 所以这里量出"一格在视口里有多长"：格子尺寸是世界像素(如 16×16)，
+# 乘 canvas transform 的缩放即得视口像素。
 func _nudge(dir: Vector2i) -> void:
 	if touch == null or not touch.is_tracking_pointer():
 		return
 	var xform: Transform2D = get_viewport().get_canvas_transform()
 	var cell := Vector2(mines.tile_set.tile_size)
-	var screen_per_cell := (xform * cell - xform * Vector2.ZERO).abs()
-	touch.nudge_pointer(Vector2(dir) * screen_per_cell)
+	var viewport_per_cell := (xform * cell - xform * Vector2.ZERO).abs()
+	touch.nudge_pointer(Vector2(dir) * viewport_per_cell)
 
 # 光标颜色(纯表现)：main 从这里改，不直接钻 board.cursor
 func set_cursor_color(c: Color) -> void:

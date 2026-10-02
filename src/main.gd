@@ -42,6 +42,10 @@ func _ready() -> void:
 
 	# 与阶段无关的接线
 	board.flags_changed.connect(func(r): counter.set_number(r))
+	# 阶段变化 → 黄框是否跟随：只有"进行中"才需要跟指针。
+	# ready(待首击)、won/lost(结算弹窗)都会盖住/等待操作，此时黄框应当停住
+	# (黄框是"下一击作用在哪"的指示器，背后乱跑会让人误判)。
+	_sm.state_changed.connect(_on_game_state_changed)
 	# 计时器每跳一秒 → 滴答声
 	timer.ticked.connect(func(): CoreSystem.audio_manager.play_sound("res://Asset/tick.wav"))
 
@@ -68,8 +72,38 @@ func _ready() -> void:
 # 唯一的新局路径：重铺棋盘 + 把阶段机推回 ready
 # (HUD 复位与收起弹窗都在 ReadyState._enter 里，这里不重复)
 func _restart() -> void:
+	# 先把设置抽屉收起来：否则"结算弹窗 + 设置抽屉"会同时留在屏幕上，
+	# 两套控件都可交互，玩家分不清自己点的是哪一个。
+	# 开新局是唯一的 UI 归一化点，所以收菜单放在这里而不是各个调用点。
+	_set_menu_open(false)
 	board.new_game()
 	_sm.transition_to(&"ready")
+
+## 阶段变化 → 同步画布侧的交互开关。
+## 放在 main 而不是各状态的 _enter 里：状态不需要知道 Board/Camera 有这些开关，
+## 部件之间的接线留在装配处，和 bind() 的用意一致。
+func _on_game_state_changed(_from: BaseState, to: BaseState) -> void:
+	_apply_canvas_interaction()
+
+## 画布侧交互的统一门控(唯一入口)。
+##
+## 原则：**有 UI 覆盖时，画布侧冻结；指针本身保持自由**(否则点不到 UI)。
+## 覆盖来源只有两个"真的有东西盖在屏幕上"的阶段：
+##   - 设置抽屉开着(_menu_open)
+##   - 对局处于结算阶段(won / lost，结算弹窗在上面)
+##
+## **ready 阶段刻意不冻结**：它是"待首击"，屏幕上没有任何覆盖物，而且进入
+## playing 的唯一途径就是棋盘收到一次点击 —— 把 ready 也冻上会形成死锁
+## (冻结输入 → 点不到棋盘 → 永远进不了 playing)。
+##
+## 冻结的东西：棋盘输入、相机缩放/平移、黄框跟随。
+## 计时器由阶段机自己管(Playing 才 start，其余阶段 stop)，不需要在这里重复。
+func _apply_canvas_interaction() -> void:
+	var state := _sm.get_current_state_name()
+	var overlay := _menu_open or state == &"won" or state == &"lost"
+	board.set_process_unhandled_input(not overlay)
+	board.pause_tracking(overlay)
+	cam.set_input_enabled(not overlay)
 
 # ---- 菜单(设置面板)：一个布尔记录"是否开着"，是输入门控的唯一真相 ----
 
@@ -80,11 +114,8 @@ func _set_menu_open(open: bool) -> void:
 	if _menu_open == open:
 		return
 	_menu_open = open
-	# 菜单占着屏幕时棋盘不接受输入(手柄导航归面板)。
-	# 这里是"意图"驱动：滑出动画那 0.2s 内棋盘已恢复响应，影响可忽略
-	board.set_process_unhandled_input(not open)
-	# 相机同样让路：否则菜单开着还能滚轮缩放/摇杆平移，面板背后的画面在动
-	cam.set_input_enabled(not open)
+	# 开关只负责改状态，画布侧的一切后果都由 _apply_canvas_interaction() 统一施加
+	_apply_canvas_interaction()
 	if open:
 		settings_panel.open()
 	else:

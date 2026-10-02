@@ -78,8 +78,8 @@ func _ready() -> void:
 			else CanvasItem.TEXTURE_FILTER_NEAREST)
 
 	visible = true
-	# 层级不在这里管：本节点挂在 Main 的 PointerLayer(CanvasLayer, layer=2) 下，
-	# 由场景结构保证它画在所有 UI 之上 —— 脚本不参与置顶
+	# 层级不在这里管：本节点是 ui.tscn 模板里 UILayer 的**最后一个子节点**，
+	# 同画布内"后添加者后画"，所以它画在按钮与面板之上。脚本不参与置顶。
 	# 只有贴图确实加载成功才藏系统光标：否则"系统光标藏了、局内指针也没画出来"，
 	# 一个光标都没有，反而更容易被误判成输入坏了。
 	if hide_system_cursor and texture_of(&"normal") != null:

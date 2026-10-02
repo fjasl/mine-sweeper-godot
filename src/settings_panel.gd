@@ -59,16 +59,26 @@ func _ready() -> void:
 	anchor_top    = 0.0
 	anchor_bottom = 1.0
 	offset_left = 0.0; offset_top = 0.0; offset_right = 0.0; offset_bottom = 0.0
+	# 本节点覆盖左半屏(高=全屏)，自身也是 Control，默认 STOP 会吃掉这半屏的事件，
+	# 事件到不了 _unhandled_input —— 表现就是"抽屉一打开，指针就推不动"。
+	# 放行本节点，只让里面的控件吃事件。
+	mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_build_ui()
 	hide()
 
 func _build_ui() -> void:
 	var panel := Panel.new()
 	panel.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	# 铺满全屏的容器必须放行输入：
+	# Control 的 mouse_filter 默认是 STOP，会把覆盖区域的鼠标/触摸事件全部吃掉，
+	# 事件到不了 _unhandled_input —— 表现就是"面板一出现，触控板指针就推不动"。
+	# 用 IGNORE：本容器不参与命中测试，但按钮/滑条等子控件各自仍是 STOP，照常可用。
+	panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(panel)
 
 	var vb := VBoxContainer.new()
 	vb.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	vb.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	var m := 24.0
 	vb.offset_left = m; vb.offset_top = m; vb.offset_right = -m; vb.offset_bottom = -m
 	vb.add_theme_constant_override("separation", 10)
@@ -144,10 +154,21 @@ func open() -> void:
 
 func close() -> void:
 	_kill_tween()
+	# **在隐藏前还回焦点**：本面板 open() 时会 _goto(0) 抓住某个控件，
+	# 而隐藏的 Control 不会自动释放焦点 —— 留着的话手柄 A(内置 ui_accept)
+	# 会一直被那个隐形控件吃掉，棋盘的 action_a 永远收不到。
+	_release_focus()
 	_tween = create_tween()
 	_tween.tween_property(self, "position:x", -get_viewport_rect().size.x * 0.5, 0.2)\
 		.set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_IN)
 	_tween.tween_callback(hide)
+
+# 把焦点从本面板的控件上摘掉(还回给 GUI 层)。
+# (局部变量不叫 owner：会遮蔽 Node.owner)
+func _release_focus() -> void:
+	var focused := get_viewport().gui_get_focus_owner()
+	if focused != null and is_ancestor_of(focused):
+		focused.release_focus()
 
 # 重开前必须停掉上一个动画：它在 close() 尾部挂的 hide 回调会在面板重新
 # 打开之后把它藏起来 —— 这是"点两次才打开"的另一半原因(kill 会一并取消回调)

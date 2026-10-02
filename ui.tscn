@@ -3,6 +3,7 @@
 [ext_resource type="Texture2D" uid="uid://hbmkaryryjay" path="res://Asset/gear.svg" id="1_fyqef"]
 [ext_resource type="Script" uid="uid://bxrcjw04fmruu" path="res://src/settings_panel.gd" id="2_m6e0p"]
 [ext_resource type="Script" uid="uid://othjnlkno6ii" path="res://src/game_over_panel.gd" id="3_gop"]
+[ext_resource type="Script" uid="uid://bottb3ks1jl00" path="res://src/pointer_cursor.gd" id="4_cur"]
 
 [node name="UILayer" type="CanvasLayer" unique_id=1560602418]
 
@@ -29,3 +30,6 @@ script = ExtResource("2_m6e0p")
 layout_mode = 3
 anchors_preset = 0
 script = ExtResource("3_gop")
+
+[node name="PointerCursor" type="Node2D" parent="." unique_id=1188061229]
+script = ExtResource("4_cur")

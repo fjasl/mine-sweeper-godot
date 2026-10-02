@@ -155,7 +155,7 @@ func _on_finger_down(index: int) -> void:
 		# 双击窗口内再次按下 → 立刻按住左键，之后拖动即"按住拖动"
 		_raw_owned = true
 		_held = true
-		_send_button(pointer_pos, MOUSE_BUTTON_LEFT, true)
+		_send_button(to_window(pointer_pos), MOUSE_BUTTON_LEFT, true)
 		_update_pointer()
 		_log("hold left (double-tap idiom)")
 	else:
@@ -164,7 +164,7 @@ func _on_finger_down(index: int) -> void:
 func _on_finger_up() -> void:
 	if _held:
 		_held = false
-		_send_button(pointer_pos, MOUSE_BUTTON_LEFT, false)
+		_send_button(to_window(pointer_pos), MOUSE_BUTTON_LEFT, false)
 		_update_pointer()
 		_log("release left")
 	_touch_index = -1
@@ -190,7 +190,8 @@ func _move_pointer(delta: Vector2) -> void:
 	_update_pointer()
 	# 每次都通知引擎指针在哪：光标(黄框)要跟着走；按住时还要带按键掩码，
 	# 这样 UI 的滑块/色轮才拖得动。
-	_send_motion(pointer_pos, Vector2.ZERO, MOUSE_BUTTON_MASK_LEFT if _held else 0)
+	# 坐标必须换算到**窗口空间** —— 命中测试在那边，见 to_window() 的说明。
+	_send_motion(to_window(pointer_pos), Vector2.ZERO, MOUSE_BUTTON_MASK_LEFT if _held else 0)
 
 func _update_pointer() -> void:
 	if pointer:
@@ -236,17 +237,36 @@ func _on_long_press(pos: Vector2, fingers: int) -> void:
 	var at := pos if tap_at_touch_point else pointer_pos
 	_click(at, MOUSE_BUTTON_RIGHT)
 
-## 合成一次完整点击(先定位、再按下、再抬起)
+## 合成一次完整点击(先定位、再按下、再抬起)。
+## 传入的是**视口逻辑坐标**，出口统一换算成窗口坐标。
 func _click(at: Vector2, button: MouseButton) -> void:
-	_send_motion(at)
-	_send_button(at, button, true)
-	_send_button(at, button, false)
-	_log("click %s at %s" % ["R" if button == MOUSE_BUTTON_RIGHT else "L", at])
+	var w := to_window(at)
+	_send_motion(w)
+	_send_button(w, button, true)
+	_send_button(w, button, false)
+	_log("click %s at viewport=%s window=%s" % [
+		"R" if button == MOUSE_BUTTON_RIGHT else "L", at, w])
 
-## 指针当前位置(**屏幕/视口逻辑坐标**)。触控板模式下它是唯一真值，
-## 棋盘/相机的世界坐标都要从这里换算。
-func pointer_screen_pos() -> Vector2:
+## 指针当前位置(**视口逻辑坐标**)。本节点是它的唯一真值。
+## 注意：它**不是**窗口坐标 —— 合成输入事件与棋盘的命中换算都要的是窗口坐标，
+## 出口处请用 to_window() / pointer_window_pos() 换算，别直接把这里当窗口坐标用。
+func pointer_viewport_pos() -> Vector2:
 	return pointer_pos
+
+## 视口逻辑坐标 → 窗口坐标。
+## 项目用 canvas_items 拉伸(基准 1280×720)，窗口实际尺寸不同时两者差一个比例
+## (1920 宽窗口 → 1.5)。**引擎的 GUI 命中测试用的是窗口坐标**，所以合成事件、
+## 以及一切"要落到某个控件上"的位置都必须先过这里，否则就会画在一个地方、
+## 点在另一个地方。
+func to_window(viewport_pos: Vector2) -> Vector2:
+	var vis := get_viewport().get_visible_rect().size
+	if vis.x <= 0.0 or vis.y <= 0.0:
+		return viewport_pos
+	return viewport_pos * (Vector2(DisplayServer.window_get_size()) / vis)
+
+## 指针的窗口坐标(合成事件与棋盘命中用这个)
+func pointer_window_pos() -> Vector2:
+	return to_window(pointer_pos)
 
 ## 由外部按屏幕位移推动指针(方向键 / 手柄 dpad 用)。
 ## 指针是唯一真相，所以"十字键移动"也走同一条路：推动指针，黄框自然跟上，
