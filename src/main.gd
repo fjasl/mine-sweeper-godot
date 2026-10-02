@@ -10,7 +10,7 @@ extends Node2D
 @onready var timer: ScoreTimer = $Background/ScoreTimer
 @onready var counter: MineCounter = $Background/MineCounter
 @onready var face: StateFace = $Background/StateFace
-@onready var settings_btn: TextureButton = $UILayer/SettingsButton
+@onready var settings_btn: Button = $UILayer/SettingsButton
 @onready var settings_panel: SettingsPanel = $UILayer/SettingsPanel
 @onready var game_over_panel: GameOverPanel = $UILayer/GameOverPanel
 
@@ -101,10 +101,12 @@ func _on_game_state_changed(_from: BaseState, to: BaseState) -> void:
 ## (冻结输入 → 点不到棋盘 → 永远进不了 playing)。
 ##
 ## 冻结的东西：棋盘输入、相机缩放/平移、黄框跟随。
-## 计时器由阶段机自己管(Playing 才 start，其余阶段 stop)，不需要在这里重复。
+## **计时不在其中**：停表/续表是一次阶段迁移(playing <-> paused，见 _sync_pause_state)，
+## 归阶段机管 —— 计时器不持有"被挂起"标志，这里也不碰它。
 func _apply_canvas_interaction() -> void:
 	var state := _sm.get_current_state_name()
-	var overlay := _menu_open or state == &"won" or state == &"lost"
+	# paused 也算"有覆盖物"：那正是抽屉开着时阶段机所处的状态
+	var overlay := _menu_open or state == &"paused" or state == &"won" or state == &"lost"
 	board.set_process_unhandled_input(not overlay)
 	board.pause_tracking(overlay)
 	cam.set_input_enabled(not overlay)
@@ -118,12 +120,26 @@ func _set_menu_open(open: bool) -> void:
 	if _menu_open == open:
 		return
 	_menu_open = open
+	# 抽屉开关先翻译成一次阶段迁移(停表 / 续表)，再统一施加画布侧的后果
+	_sync_pause_state()
 	# 开关只负责改状态，画布侧的一切后果都由 _apply_canvas_interaction() 统一施加
 	_apply_canvas_interaction()
 	if open:
 		settings_panel.open()
 	else:
 		settings_panel.close()
+
+## 抽屉开着 = playing -> paused(表停)；收起 = paused -> playing(接着走)。
+## 只在 playing 之间来回，另三种状态刻意都不迁移：
+##   ready      —— 表本来就没走(待首击)
+##   won / lost —— 表由各自状态停住；此时开抽屉也不该把表再走起来
+## 这样"表该不该走"仍然只由当前阶段决定，main 不需要记住任何计时状态。
+func _sync_pause_state() -> void:
+	var state := _sm.get_current_state_name()
+	if _menu_open and state == &"playing":
+		_sm.transition_to(&"paused")
+	elif not _menu_open and state == &"paused":
+		_sm.transition_to(&"playing")
 
 
 # 设置面板"应用"：颜色是表现层的事，规格变更交给 Board

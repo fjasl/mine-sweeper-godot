@@ -1,0 +1,465 @@
+[gd_scene format=3 uid="uid://52ar3miwmyg4"]
+
+[ext_resource type="Shader" uid="uid://7g21n7wgtpam" path="res://ui/shaders/loop_rotion.gdshader" id="1_pw63i"]
+[ext_resource type="Texture2D" uid="uid://dbhihlewilaer" path="res://ui/assets/images/星形.svg" id="1_w2twt"]
+[ext_resource type="FontFile" uid="uid://b713ksq3bmjs8" path="res://ui/assets/fonts/ZCOOLKuaiLe-Regular.ttf" id="3_7ykc4"]
+[ext_resource type="PackedScene" uid="uid://uq8bcy76qaut" path="res://ui/gameobjects/line_setting_option_button/line_setting_option_button.tscn" id="4_18nlu"]
+[ext_resource type="FontVariation" uid="uid://d3yahjshnhwxf" path="res://ui/fonts/base_font.tres" id="4_pu3yx"]
+[ext_resource type="PackedScene" uid="uid://bryxninli7jim" path="res://ui/gameobjects/line_setting_check_button/line_setting_check_button.tscn" id="5_rt2n2"]
+[ext_resource type="LabelSettings" uid="uid://dbdlng3mfuawn" path="res://ui/label_settings/base_label_settings.tres" id="6_c1pb6"]
+[ext_resource type="PackedScene" uid="uid://br4kbnfc6akxa" path="res://ui/gameobjects/line_setting_slider/line_setting_slider.tscn" id="6_c16ls"]
+[ext_resource type="PackedScene" uid="uid://bdfvhj5v342xb" path="res://ui/gameobjects/segmentation_line/segmentation_line.tscn" id="7_c1pb6"]
+[ext_resource type="Texture2D" uid="uid://d4dmab456xkck" path="res://ui/assets/images/首页 (1).svg" id="10_4w45t"]
+[ext_resource type="Script" uid="uid://w7sv567pvedh" path="res://ui/scenes/bottom_button_container.gd" id="10_6u1mn"]
+[ext_resource type="Texture2D" uid="uid://be8b4anowl7tp" path="res://ui/assets/images/设置.svg" id="11_r6p65"]
+[ext_resource type="AudioStream" uid="uid://wbgnkidat43k" path="res://ui/assets/audios/Free 游戏音效 Sound Effects Download - Pixabay(1).mp3" id="13_bcnxi"]
+[ext_resource type="Script" uid="uid://cmigyccwlmajs" path="res://ui/scripts/tween_manager.gd" id="15_si52b"]
+[ext_resource type="Script" uid="uid://rntqfl6p8xrt" path="res://ui/scripts/tween_node.gd" id="16_01n6w"]
+
+[ext_resource type="Theme" uid="uid://ci68518fr8e6r" path="res://ui/themes/base_theme.tres" id="99_uitheme"]
+[sub_resource type="ShaderMaterial" id="ShaderMaterial_7ykc4"]
+shader = ExtResource("1_pw63i")
+shader_parameter/tile_count = Vector2(1.5, 1.5)
+shader_parameter/rotation_angle = 0.285
+shader_parameter/rotation_speed = 0.600000171
+shader_parameter/move_speed = Vector2(0.15, 0.15)
+
+[sub_resource type="StyleBoxEmpty" id="StyleBoxEmpty_x3juh"]
+
+[sub_resource type="StyleBoxEmpty" id="StyleBoxEmpty_6qpvs"]
+
+[sub_resource type="FontVariation" id="FontVariation_pu3yx"]
+base_font = ExtResource("3_7ykc4")
+spacing_glyph = 11
+
+[sub_resource type="LabelSettings" id="LabelSettings_pyg4m"]
+font = SubResource("FontVariation_pu3yx")
+font_size = 40
+outline_size = 11
+outline_color = Color(0.45490196, 0.58431375, 0.53333336, 1)
+shadow_size = 15
+shadow_color = Color(0.21960784, 0.2627451, 0.29411766, 1)
+shadow_offset = Vector2(1.66, 2.05)
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_xdqt8"]
+content_margin_left = 10.0
+content_margin_top = 10.0
+content_margin_right = 10.0
+content_margin_bottom = 10.0
+bg_color = Color(0.2485244, 0.24458763, 0.3351786, 1)
+border_width_left = 3
+border_width_top = 3
+border_width_right = 3
+border_width_bottom = 3
+border_color = Color(0.4862745, 0.6039216, 0.58431375, 1)
+corner_radius_top_left = 12
+corner_radius_top_right = 12
+corner_radius_bottom_right = 12
+corner_radius_bottom_left = 12
+shadow_color = Color(0.23921569, 0.23921569, 0.23921569, 1)
+shadow_size = 2
+shadow_offset = Vector2(1.69, 2.605)
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_mngbo"]
+content_margin_left = 50.0
+content_margin_top = 5.0
+content_margin_right = 50.0
+content_margin_bottom = 5.0
+bg_color = Color(0.3764706, 0.3764706, 0.3764706, 1)
+border_color = Color(0.4862745, 0.6039216, 0.58431375, 1)
+corner_radius_top_left = 12
+corner_radius_top_right = 12
+corner_radius_bottom_right = 12
+corner_radius_bottom_left = 12
+shadow_color = Color(0.23921569, 0.23921569, 0.23921569, 1)
+shadow_size = 2
+shadow_offset = Vector2(1.69, 2.605)
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_bcnxi"]
+content_margin_left = 30.0
+content_margin_top = 5.0
+content_margin_right = 30.0
+content_margin_bottom = 5.0
+bg_color = Color(0.16862746, 0.16078432, 0.23137255, 1)
+border_width_left = 3
+border_width_top = 3
+border_width_right = 3
+border_width_bottom = 3
+border_color = Color(0.9151891, 0.9151892, 0.915189, 1)
+corner_radius_top_left = 12
+corner_radius_top_right = 12
+corner_radius_bottom_right = 12
+corner_radius_bottom_left = 12
+shadow_color = Color(0.23921569, 0.23921569, 0.23921569, 1)
+shadow_size = 2
+shadow_offset = Vector2(1.69, 2.605)
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_c1pb6"]
+content_margin_left = 30.0
+content_margin_top = 5.0
+content_margin_right = 30.0
+content_margin_bottom = 5.0
+bg_color = Color(0.33996853, 0.32929537, 0.4390545, 1)
+corner_radius_top_left = 12
+corner_radius_top_right = 12
+corner_radius_bottom_right = 12
+corner_radius_bottom_left = 12
+shadow_color = Color(0, 0, 0, 0.2627451)
+shadow_size = 1
+shadow_offset = Vector2(1.55, 1.56)
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_e1cbu"]
+content_margin_left = 30.0
+content_margin_top = 5.0
+content_margin_right = 30.0
+content_margin_bottom = 5.0
+bg_color = Color(0.14342701, 0.13732314, 0.19503963, 1)
+corner_radius_top_left = 12
+corner_radius_top_right = 12
+corner_radius_bottom_right = 12
+corner_radius_bottom_left = 12
+
+[sub_resource type="Theme" id="Theme_r8lqd"]
+default_font = ExtResource("3_7ykc4")
+Button/colors/icon_hover_color = Color(0.9254902, 0.9254902, 0.9254902, 1)
+Button/colors/icon_hover_pressed_color = Color(0.54901963, 0.54901963, 0.54901963, 1)
+Button/colors/icon_normal_color = Color(0.9254902, 0.9254902, 0.9254902, 1)
+Button/colors/icon_pressed_color = Color(0.5502926, 0.5502933, 0.55029315, 1)
+Button/styles/disabled = SubResource("StyleBoxFlat_mngbo")
+Button/styles/focus = SubResource("StyleBoxFlat_bcnxi")
+Button/styles/hover = SubResource("StyleBoxFlat_c1pb6")
+Button/styles/hover_pressed = SubResource("StyleBoxFlat_e1cbu")
+Button/styles/normal = SubResource("StyleBoxFlat_c1pb6")
+Button/styles/pressed = SubResource("StyleBoxFlat_e1cbu")
+
+[sub_resource type="ButtonGroup" id="ButtonGroup_bcnxi"]
+
+[node name="MainScene" type="Control" unique_id=1818963912]
+theme = ExtResource("99_uitheme")
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+
+[node name="ColorRect" type="ColorRect" parent="." unique_id=609332522]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+color = Color(0.3529412, 0.5294118, 0.42745098, 1)
+
+[node name="TextureRect" type="TextureRect" parent="." unique_id=937147434]
+material = SubResource("ShaderMaterial_7ykc4")
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_right = 1.0
+offset_bottom = -2.0
+grow_horizontal = 2
+grow_vertical = 2
+texture = ExtResource("1_w2twt")
+expand_mode = 1
+stretch_mode = 1
+
+[node name="TabContainer" type="TabContainer" parent="." unique_id=423801924]
+layout_mode = 1
+anchors_preset = 8
+anchor_left = 0.5
+anchor_top = 0.5
+anchor_right = 0.5
+anchor_bottom = 0.5
+offset_left = -208.0
+offset_top = -264.5
+offset_right = 208.0
+offset_bottom = 216.5
+grow_horizontal = 2
+grow_vertical = 2
+theme_override_styles/panel = SubResource("StyleBoxEmpty_x3juh")
+current_tab = 0
+tabs_visible = false
+
+[node name="PanelContainerHome" type="PanelContainer" parent="TabContainer" unique_id=858064500]
+layout_mode = 2
+theme_override_styles/panel = SubResource("StyleBoxEmpty_6qpvs")
+metadata/_tab_index = 0
+
+[node name="VBoxContainer" type="VBoxContainer" parent="TabContainer/PanelContainerHome" unique_id=228662196]
+layout_mode = 2
+theme_override_constants/separation = 20
+
+[node name="Label" type="Label" parent="TabContainer/PanelContainerHome/VBoxContainer" unique_id=1471433745]
+layout_mode = 2
+size_flags_horizontal = 4
+offset_transform_enabled = true
+text = "首页测试"
+label_settings = SubResource("LabelSettings_pyg4m")
+
+[node name="PanelContainer" type="PanelContainer" parent="TabContainer/PanelContainerHome/VBoxContainer" unique_id=733562331]
+custom_minimum_size = Vector2(416, 420)
+layout_mode = 2
+offset_transform_enabled = true
+
+[node name="ScrollContainer" type="ScrollContainer" parent="TabContainer/PanelContainerHome/VBoxContainer/PanelContainer" unique_id=1134546680]
+layout_mode = 2
+
+[node name="VBoxContainer" type="VBoxContainer" parent="TabContainer/PanelContainerHome/VBoxContainer/PanelContainer/ScrollContainer" unique_id=1720006526]
+layout_mode = 2
+size_flags_horizontal = 3
+size_flags_vertical = 3
+theme_override_constants/separation = 9
+
+[node name="LineSettingCheckButton2" parent="TabContainer/PanelContainerHome/VBoxContainer/PanelContainer/ScrollContainer/VBoxContainer" unique_id=626783831 instance=ExtResource("5_rt2n2")]
+layout_mode = 2
+
+[node name="Label" parent="TabContainer/PanelContainerHome/VBoxContainer/PanelContainer/ScrollContainer/VBoxContainer/LineSettingCheckButton2" index="0" unique_id=7148652]
+text = "字母提示"
+
+[node name="LineSettingCheckButton3" parent="TabContainer/PanelContainerHome/VBoxContainer/PanelContainer/ScrollContainer/VBoxContainer" unique_id=1881323907 instance=ExtResource("5_rt2n2")]
+layout_mode = 2
+
+[node name="Label" parent="TabContainer/PanelContainerHome/VBoxContainer/PanelContainer/ScrollContainer/VBoxContainer/LineSettingCheckButton3" index="0" unique_id=7148652]
+text = "相机鼠标偏移"
+
+[node name="LineSettingSlider" parent="TabContainer/PanelContainerHome/VBoxContainer/PanelContainer/ScrollContainer/VBoxContainer" unique_id=2003322288 instance=ExtResource("6_c16ls")]
+layout_mode = 2
+start_text = &"x"
+
+[node name="LabelTitle" parent="TabContainer/PanelContainerHome/VBoxContainer/PanelContainer/ScrollContainer/VBoxContainer/LineSettingSlider" index="0" unique_id=1926055939]
+text = "震动"
+
+[node name="HSlider" parent="TabContainer/PanelContainerHome/VBoxContainer/PanelContainer/ScrollContainer/VBoxContainer/LineSettingSlider" index="1" unique_id=22353613]
+max_value = 10.0
+value = 3.0
+tick_count = 11
+ticks_on_borders = true
+ticks_position = 2
+
+[node name="LineSettingSlider2" parent="TabContainer/PanelContainerHome/VBoxContainer/PanelContainer/ScrollContainer/VBoxContainer" unique_id=842850859 instance=ExtResource("6_c16ls")]
+layout_mode = 2
+start_text = &"x"
+
+[node name="LabelTitle" parent="TabContainer/PanelContainerHome/VBoxContainer/PanelContainer/ScrollContainer/VBoxContainer/LineSettingSlider2" index="0" unique_id=1926055939]
+text = "游戏速率"
+
+[node name="HSlider" parent="TabContainer/PanelContainerHome/VBoxContainer/PanelContainer/ScrollContainer/VBoxContainer/LineSettingSlider2" index="1" unique_id=22353613]
+max_value = 4.0
+value = 3.0
+tick_count = 5
+ticks_on_borders = true
+ticks_position = 2
+
+[node name="PanelContainerSetting" type="PanelContainer" parent="TabContainer" unique_id=2123309191]
+visible = false
+layout_mode = 2
+theme_override_styles/panel = SubResource("StyleBoxEmpty_6qpvs")
+metadata/_tab_index = 1
+
+[node name="VBoxContainer" type="VBoxContainer" parent="TabContainer/PanelContainerSetting" unique_id=1567300841]
+layout_mode = 2
+theme_override_constants/separation = 20
+
+[node name="Label" type="Label" parent="TabContainer/PanelContainerSetting/VBoxContainer" unique_id=659247261]
+layout_mode = 2
+size_flags_horizontal = 4
+offset_transform_enabled = true
+text = "设置"
+label_settings = SubResource("LabelSettings_pyg4m")
+
+[node name="PanelContainer" type="PanelContainer" parent="TabContainer/PanelContainerSetting/VBoxContainer" unique_id=1534612689]
+custom_minimum_size = Vector2(416, 420)
+layout_mode = 2
+offset_transform_enabled = true
+
+[node name="ScrollContainer" type="ScrollContainer" parent="TabContainer/PanelContainerSetting/VBoxContainer/PanelContainer" unique_id=1889453981]
+layout_mode = 2
+
+[node name="VBoxContainer" type="VBoxContainer" parent="TabContainer/PanelContainerSetting/VBoxContainer/PanelContainer/ScrollContainer" unique_id=1090871377]
+layout_mode = 2
+size_flags_horizontal = 3
+size_flags_vertical = 3
+theme_override_constants/separation = 9
+
+[node name="LineSettingOptionButton" parent="TabContainer/PanelContainerSetting/VBoxContainer/PanelContainer/ScrollContainer/VBoxContainer" unique_id=618604339 instance=ExtResource("4_18nlu")]
+layout_mode = 2
+
+[node name="OptionButton" parent="TabContainer/PanelContainerSetting/VBoxContainer/PanelContainer/ScrollContainer/VBoxContainer/LineSettingOptionButton" index="1" unique_id=1702135424]
+item_count = 4
+popup/item_1/text = "韩语"
+popup/item_1/id = 1
+popup/item_2/text = "日语"
+popup/item_2/id = 2
+popup/item_3/text = "中文"
+popup/item_3/id = 3
+
+[node name="LineSettingCheckButton" parent="TabContainer/PanelContainerSetting/VBoxContainer/PanelContainer/ScrollContainer/VBoxContainer" unique_id=1948366690 instance=ExtResource("5_rt2n2")]
+layout_mode = 2
+
+[node name="LineSettingContainer4" type="HBoxContainer" parent="TabContainer/PanelContainerSetting/VBoxContainer/PanelContainer/ScrollContainer/VBoxContainer" unique_id=937605104]
+layout_mode = 2
+
+[node name="Label" type="Label" parent="TabContainer/PanelContainerSetting/VBoxContainer/PanelContainer/ScrollContainer/VBoxContainer/LineSettingContainer4" unique_id=1107235594]
+layout_mode = 2
+text = "宽高比"
+label_settings = ExtResource("6_c1pb6")
+
+[node name="OptionButton" type="OptionButton" parent="TabContainer/PanelContainerSetting/VBoxContainer/PanelContainer/ScrollContainer/VBoxContainer/LineSettingContainer4" unique_id=259945082]
+custom_minimum_size = Vector2(160, 0)
+layout_mode = 2
+size_flags_horizontal = 10
+theme_override_fonts/font = ExtResource("4_pu3yx")
+theme_override_font_sizes/font_size = 14
+selected = 0
+item_count = 5
+popup/item_0/text = "扩展"
+popup/item_0/id = 0
+popup/item_1/text = "保留高度"
+popup/item_1/id = 1
+popup/item_2/text = "保留宽度"
+popup/item_2/id = 2
+popup/item_3/text = "保留宽高"
+popup/item_3/id = 3
+popup/item_4/text = "忽略"
+popup/item_4/id = 4
+
+[node name="SegmentationLine" parent="TabContainer/PanelContainerSetting/VBoxContainer/PanelContainer/ScrollContainer/VBoxContainer" unique_id=537233631 instance=ExtResource("7_c1pb6")]
+layout_mode = 2
+title = &"声音设置"
+
+[node name="LineSettingSliderMainMusic" parent="TabContainer/PanelContainerSetting/VBoxContainer/PanelContainer/ScrollContainer/VBoxContainer" unique_id=165410574 instance=ExtResource("6_c16ls")]
+layout_mode = 2
+end_text = &"%"
+
+[node name="LineSettingSliderBackgroundMusic" parent="TabContainer/PanelContainerSetting/VBoxContainer/PanelContainer/ScrollContainer/VBoxContainer" unique_id=787354214 instance=ExtResource("6_c16ls")]
+layout_mode = 2
+end_text = &"%"
+
+[node name="LabelTitle" parent="TabContainer/PanelContainerSetting/VBoxContainer/PanelContainer/ScrollContainer/VBoxContainer/LineSettingSliderBackgroundMusic" index="0" unique_id=1926055939]
+text = "背景音乐"
+
+[node name="LineSettingSliderEffects" parent="TabContainer/PanelContainerSetting/VBoxContainer/PanelContainer/ScrollContainer/VBoxContainer" unique_id=954319771 instance=ExtResource("6_c16ls")]
+layout_mode = 2
+end_text = &"%"
+
+[node name="LabelTitle" parent="TabContainer/PanelContainerSetting/VBoxContainer/PanelContainer/ScrollContainer/VBoxContainer/LineSettingSliderEffects" index="0" unique_id=1926055939]
+text = "特效声音"
+
+[node name="Line2" type="ColorRect" parent="TabContainer/PanelContainerSetting/VBoxContainer/PanelContainer/ScrollContainer/VBoxContainer" unique_id=1246246106]
+custom_minimum_size = Vector2(0, 3)
+layout_mode = 2
+size_flags_horizontal = 3
+size_flags_vertical = 4
+color = Color(0.21176471, 0.19607843, 0.27450982, 1)
+
+[node name="LineSettingCheckButton2" parent="TabContainer/PanelContainerSetting/VBoxContainer/PanelContainer/ScrollContainer/VBoxContainer" unique_id=2017420655 instance=ExtResource("5_rt2n2")]
+layout_mode = 2
+
+[node name="Label" parent="TabContainer/PanelContainerSetting/VBoxContainer/PanelContainer/ScrollContainer/VBoxContainer/LineSettingCheckButton2" index="0" unique_id=7148652]
+text = "字母提示"
+
+[node name="LineSettingCheckButton3" parent="TabContainer/PanelContainerSetting/VBoxContainer/PanelContainer/ScrollContainer/VBoxContainer" unique_id=1436887487 instance=ExtResource("5_rt2n2")]
+layout_mode = 2
+
+[node name="Label" parent="TabContainer/PanelContainerSetting/VBoxContainer/PanelContainer/ScrollContainer/VBoxContainer/LineSettingCheckButton3" index="0" unique_id=7148652]
+text = "相机鼠标偏移"
+
+[node name="LineSettingSlider" parent="TabContainer/PanelContainerSetting/VBoxContainer/PanelContainer/ScrollContainer/VBoxContainer" unique_id=1756355673 instance=ExtResource("6_c16ls")]
+layout_mode = 2
+start_text = &"x"
+
+[node name="LabelTitle" parent="TabContainer/PanelContainerSetting/VBoxContainer/PanelContainer/ScrollContainer/VBoxContainer/LineSettingSlider" index="0" unique_id=1926055939]
+text = "震动"
+
+[node name="HSlider" parent="TabContainer/PanelContainerSetting/VBoxContainer/PanelContainer/ScrollContainer/VBoxContainer/LineSettingSlider" index="1" unique_id=22353613]
+max_value = 10.0
+value = 3.0
+tick_count = 11
+ticks_on_borders = true
+ticks_position = 2
+
+[node name="LineSettingSlider2" parent="TabContainer/PanelContainerSetting/VBoxContainer/PanelContainer/ScrollContainer/VBoxContainer" unique_id=2093848919 instance=ExtResource("6_c16ls")]
+layout_mode = 2
+start_text = &"x"
+
+[node name="LabelTitle" parent="TabContainer/PanelContainerSetting/VBoxContainer/PanelContainer/ScrollContainer/VBoxContainer/LineSettingSlider2" index="0" unique_id=1926055939]
+text = "游戏速率"
+
+[node name="HSlider" parent="TabContainer/PanelContainerSetting/VBoxContainer/PanelContainer/ScrollContainer/VBoxContainer/LineSettingSlider2" index="1" unique_id=22353613]
+max_value = 4.0
+value = 3.0
+tick_count = 5
+ticks_on_borders = true
+ticks_position = 2
+
+[node name="BottomPanelContainer" type="PanelContainer" parent="." unique_id=30226875 node_paths=PackedStringArray("tab_container")]
+layout_mode = 1
+anchors_preset = 7
+anchor_left = 0.5
+anchor_top = 1.0
+anchor_right = 0.5
+anchor_bottom = 1.0
+offset_left = -94.0
+offset_top = -70.0
+offset_right = 94.0
+offset_bottom = -18.0
+grow_horizontal = 2
+grow_vertical = 0
+theme_override_styles/panel = SubResource("StyleBoxFlat_xdqt8")
+script = ExtResource("10_6u1mn")
+tab_container = NodePath("../TabContainer")
+
+[node name="BottomContainer" type="HBoxContainer" parent="BottomPanelContainer" unique_id=1647915730]
+layout_mode = 2
+offset_transform_enabled = true
+theme = SubResource("Theme_r8lqd")
+
+[node name="ButtonHome" type="Button" parent="BottomPanelContainer/BottomContainer" unique_id=1630992479]
+layout_mode = 2
+offset_transform_enabled = true
+mouse_default_cursor_shape = 2
+theme_override_constants/icon_max_width = 22
+toggle_mode = true
+button_pressed = true
+action_mode = 0
+button_group = SubResource("ButtonGroup_bcnxi")
+icon = ExtResource("10_4w45t")
+icon_alignment = 1
+
+[node name="ButtonSetting" type="Button" parent="BottomPanelContainer/BottomContainer" unique_id=2066724867]
+layout_mode = 2
+offset_transform_enabled = true
+mouse_default_cursor_shape = 2
+theme_override_constants/icon_max_width = 22
+toggle_mode = true
+action_mode = 0
+button_group = SubResource("ButtonGroup_bcnxi")
+icon = ExtResource("11_r6p65")
+icon_alignment = 1
+
+[node name="ButtonAudioStreamPlayer" type="AudioStreamPlayer" parent="BottomPanelContainer/BottomContainer" unique_id=424382634]
+stream = ExtResource("13_bcnxi")
+
+[node name="TweenNode" type="Node" parent="." unique_id=1028968040]
+script = ExtResource("16_01n6w")
+metadata/_custom_type_script = "uid://rntqfl6p8xrt"
+
+[node name="TweenManager" type="Node" parent="." unique_id=444864246]
+script = ExtResource("15_si52b")
+animation_scale = Vector2(0, 0)
+animation_delay = 0.0
+
+[editable path="TabContainer/PanelContainerHome/VBoxContainer/PanelContainer/ScrollContainer/VBoxContainer/LineSettingCheckButton2"]
+[editable path="TabContainer/PanelContainerHome/VBoxContainer/PanelContainer/ScrollContainer/VBoxContainer/LineSettingCheckButton3"]
+[editable path="TabContainer/PanelContainerHome/VBoxContainer/PanelContainer/ScrollContainer/VBoxContainer/LineSettingSlider"]
+[editable path="TabContainer/PanelContainerHome/VBoxContainer/PanelContainer/ScrollContainer/VBoxContainer/LineSettingSlider2"]
+[editable path="TabContainer/PanelContainerSetting/VBoxContainer/PanelContainer/ScrollContainer/VBoxContainer/LineSettingOptionButton"]
+[editable path="TabContainer/PanelContainerSetting/VBoxContainer/PanelContainer/ScrollContainer/VBoxContainer/LineSettingSliderBackgroundMusic"]
+[editable path="TabContainer/PanelContainerSetting/VBoxContainer/PanelContainer/ScrollContainer/VBoxContainer/LineSettingSliderEffects"]
+[editable path="TabContainer/PanelContainerSetting/VBoxContainer/PanelContainer/ScrollContainer/VBoxContainer/LineSettingCheckButton2"]
+[editable path="TabContainer/PanelContainerSetting/VBoxContainer/PanelContainer/ScrollContainer/VBoxContainer/LineSettingCheckButton3"]
+[editable path="TabContainer/PanelContainerSetting/VBoxContainer/PanelContainer/ScrollContainer/VBoxContainer/LineSettingSlider"]
+[editable path="TabContainer/PanelContainerSetting/VBoxContainer/PanelContainer/ScrollContainer/VBoxContainer/LineSettingSlider2"]

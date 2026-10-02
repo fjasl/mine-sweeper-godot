@@ -10,9 +10,15 @@
 [ext_resource type="PackedScene" uid="uid://c2gw8tsk62yka" path="res://ui.tscn" id="8_sus66"]
 [ext_resource type="Script" uid="uid://i1hd07q25m37" path="res://src/touch_bindings.gd" id="9_bind"]
 [ext_resource type="Script" uid="uid://odmlh7w442hm" path="res://addons/touch_gestures/touch_gestures.gd" id="9_gest"]
+[ext_resource type="PackedScene" path="res://ui/scenes/backdrop.tscn" id="7_backdrop"]
 
 [node name="Main" type="Node2D" unique_id=289937505]
 script = ExtResource("1_ydgul")
+
+; 模板那块星形滚动背景：layer = -1 的 CanvasLayer，画在世界画布(层 0)后面，
+; 所以棋盘/HUD/抽屉都还在它上面；两层全屏 Control 已经在 backdrop.tscn 里设了
+; mouse_filter = IGNORE，不会吃输入。
+[node name="Backdrop" parent="." instance=ExtResource("7_backdrop")]
 
 [node name="Background" type="Node2D" parent="." unique_id=105807495]
 position = Vector2(640, 360)

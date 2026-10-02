@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN" "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<svg width="100%" height="100%" viewBox="0 0 95 95" version="1.1" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" xml:space="preserve" xmlns:serif="http://www.serif.com/" style="fill-rule:evenodd;clip-rule:evenodd;stroke-linejoin:round;stroke-miterlimit:2;">
+    <g transform="matrix(0.38531,0,0,0.38531,-264.158102,-209.267118)">
+        <path d="M804.257,619.703C805.075,618.064 806.75,617.029 808.582,617.029C810.413,617.029 812.088,618.064 812.906,619.703L826.931,647.772L855.001,661.797C856.64,662.616 857.675,664.29 857.675,666.122C857.675,667.954 856.64,669.628 855.001,670.447L826.931,684.472L812.906,712.542C812.088,714.18 810.413,715.216 808.582,715.216C806.75,715.216 805.075,714.18 804.257,712.542L790.232,684.472L762.162,670.447C760.523,669.628 759.488,667.954 759.488,666.122C759.488,664.29 760.523,662.616 762.162,661.797L790.232,647.772L804.257,619.703Z" style="fill:rgb(123,178,146);"/>
+    </g>
+    <g id="画板1" transform="matrix(0.44495,0,0,0.44495,142.113412,-118.647896)">
+        <rect x="-319.392" y="266.655" width="213.041" height="213.041" style="fill:none;"/>
+    </g>
+</svg>

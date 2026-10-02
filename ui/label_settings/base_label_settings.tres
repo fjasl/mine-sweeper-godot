@@ -1,0 +1,6 @@
+[gd_resource type="LabelSettings" format=3 uid="uid://dbdlng3mfuawn"]
+
+[ext_resource type="FontVariation" uid="uid://d3yahjshnhwxf" path="res://ui/fonts/base_font.tres" id="1_ooo50"]
+
+[resource]
+font = ExtResource("1_ooo50")

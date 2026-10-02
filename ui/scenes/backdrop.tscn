@@ -1,0 +1,35 @@
+[gd_scene format=3 uid="uid://dpd2hwh8rldn5"]
+
+[ext_resource type="Shader" uid="uid://7g21n7wgtpam" path="res://ui/shaders/loop_rotion.gdshader" id="1_shader"]
+[ext_resource type="Texture2D" uid="uid://dbhihlewilaer" path="res://ui/assets/images/星形.svg" id="2_star"]
+
+[sub_resource type="ShaderMaterial" id="ShaderMaterial_backdrop"]
+shader = ExtResource("1_shader")
+shader_parameter/tile_count = Vector2(1.5, 1.5)
+shader_parameter/rotation_angle = 0.285
+shader_parameter/rotation_speed = 0.600000171
+shader_parameter/move_speed = Vector2(-0.5, -0.5)
+
+[node name="Backdrop" type="CanvasLayer" unique_id=1335787543]
+layer = -1
+
+[node name="BgColor" type="ColorRect" parent="." unique_id=1612739363]
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+color = Color(0.3529412, 0.5294118, 0.42745098, 1)
+
+[node name="Stars" type="TextureRect" parent="." unique_id=1196075505]
+material = SubResource("ShaderMaterial_backdrop")
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+texture = ExtResource("2_star")
+expand_mode = 1
+stretch_mode = 1

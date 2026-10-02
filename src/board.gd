@@ -23,6 +23,15 @@ var cursor_cell := Vector2i.ZERO
 ## 由 _may_act_on_cursor 直接放行，不受这个标志约束。
 var _pointer_on_board := true
 
+## 黄框这一路的"是否该由指针接管"的判据：记住上一帧指针的**位置**与它算出的**格子**。
+##   - 位置变了(鼠标/手指/虚拟指针动了，哪怕只在同一格内挪) → 指针接管
+##   - 格子变了(相机平移/缩放让世界在指针底下滑动)          → 指针接管
+## 两者都没变，就说明"指针和世界都静止"，此时保留十字键直接挪到的格子，
+## 不然每帧重算会把十字键挪的格子抹回去(桌面端十字键挪不动黄框就是这么来的)。
+var _pointer_pos := Vector2.ZERO
+var _pointer_cell := Vector2i.ZERO
+var _pointer_seen := false
+
 func _ready() -> void:
 	mines.start_game()
 	cursor.setup(mines)
@@ -40,6 +49,9 @@ func _ready() -> void:
 #     一旦拖了相机，指针与黄框的对应关系就再也对不上(表现为"格子选中不再动")。
 #  2) 移动端合成事件不改变引擎记录的鼠标位置，读 get_global_mouse_position()
 #     是错的，所以位置统一从 TouchBindings 取。
+#
+# 但**不是无条件覆盖**：十字键直接挪过的格子必须留得住，所以只在"指针或世界动过"
+# 时才接管 —— 判据与理由见 _update_cursor_from_pointer() 与 _pointer_pos 的声明。
 func _process(_delta: float) -> void:
 	_update_cursor_from_pointer()
 	# 缩放锚点跟着指针走(相机在缩放时保持这个点不动)。
@@ -87,7 +99,15 @@ func pause_tracking(paused: bool) -> void:
 		_update_cursor_from_pointer()
 
 func _update_cursor_from_pointer() -> void:
-	var mc := mines.local_to_map(_screen_to_local(_pointer_viewport_pos()))
+	var p := _pointer_viewport_pos()
+	var mc := mines.local_to_map(_screen_to_local(p))
+	# 指针和世界都没动过 → 这一帧别碰黄框，把十字键挪到的格子留住。
+	# 判据见 _pointer_pos / _pointer_cell 的声明处。
+	if _pointer_seen and p == _pointer_pos and mc == _pointer_cell:
+		return
+	_pointer_seen = true
+	_pointer_pos = p
+	_pointer_cell = mc
 	_pointer_on_board = mines.in_bounds(mc)
 	# 指针在棋盘外(或相机把棋盘移出屏幕)时**什么都不做**：
 	# 保留上一次的合法选中，不夹取、不隐藏 —— 界外移动不该改变内部选中。
@@ -119,10 +139,7 @@ func _unhandled_input(event: InputEvent) -> void:
 	# 被 _may_act_on_cursor 挡掉时**刻意不** set_input_as_handled()：
 	# 那一次什么都没做，没有理由把它从事件管线里吞掉。
 
-	# 移动光标：方向键 / 手柄 dpad。
-	# 走 nudge_pointer() 而不是直接改 cursor_cell —— 黄框每帧由指针位置算出来，
-	# 直接改 cursor_cell 会在下一帧被 _process 抹掉。推动指针则一切自洽。
-	# (桌面端 TouchBindings 未接管指针时，dpad 不生效；桌面用鼠标/相机即可)
+	# 移动光标：方向键 / 手柄 dpad。归属随平台走，见 _nudge
 	elif event.is_action_pressed("move_left"):
 		_nudge(Vector2i(-1, 0))
 	elif event.is_action_pressed("move_right"):
@@ -148,17 +165,24 @@ func _may_act_on_cursor(event: InputEvent) -> bool:
 		return _pointer_on_board
 	return true
 
-# 按"一格"推动虚拟指针。
-# nudge_pointer() 收的是**视口逻辑坐标**(和 pointer_pos 同一个空间)，
-# 所以这里量出"一格在视口里有多长"：格子尺寸是世界像素(如 16×16)，
-# 乘 canvas transform 的缩放即得视口像素。
+# 按"一格"移动选中(方向键 / 手柄 dpad)。
+#
+# **归属随平台走**，两边不能同时做，否则一次按下会挪两格或落点不一致：
+#  - 移动端：推虚拟指针。轻点是"点在指针处"，只挪黄框会让点击落在原来那格。
+#    nudge_pointer() 收的是**视口逻辑坐标**(和 pointer_pos 同一空间)，所以这里量出
+#    "一格在视口里有多长"：格子尺寸是世界像素(如 16×16)，乘 canvas transform 即得。
+#  - 桌面端：没有虚拟指针可推(推了引擎也不认，指针仍是系统鼠标)，就直接挪黄框自己。
+#    这样挪完不会被每帧重算抹掉 —— _update_cursor_from_pointer() 只在"指针或世界动过"
+#    时才接管，鼠标一动手柄交还，两边都不打架。
 func _nudge(dir: Vector2i) -> void:
-	if touch == null or not touch.is_tracking_pointer():
+	if touch != null and touch.is_tracking_pointer():
+		var xform: Transform2D = get_viewport().get_canvas_transform()
+		var cell := Vector2(mines.tile_set.tile_size)
+		var viewport_per_cell := (xform * cell - xform * Vector2.ZERO).abs()
+		touch.nudge_pointer(Vector2(dir) * viewport_per_cell)
 		return
-	var xform: Transform2D = get_viewport().get_canvas_transform()
-	var cell := Vector2(mines.tile_set.tile_size)
-	var viewport_per_cell := (xform * cell - xform * Vector2.ZERO).abs()
-	touch.nudge_pointer(Vector2(dir) * viewport_per_cell)
+	set_cursor_cell(cursor_cell.clamp(Vector2i.ZERO, Vector2i(mines.cols - 1, mines.rows - 1)) + dir)
+	clamp_cursor()
 
 # 光标颜色(纯表现)：main 从这里改，不直接钻 board.cursor
 func set_cursor_color(c: Color) -> void:

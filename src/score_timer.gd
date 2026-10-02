@@ -11,6 +11,9 @@ signal ticked   # 每过 1 秒触发一次
 @onready var d: Array = [$D0, $D1, $D2]    # 3 个 Sprite2D,同一张 led 纹理,开 region
 
 var elapsed := 0.0
+## 表当前是否在走。**完全由阶段机决定**(Playing 才 true，其余 false)。
+## 唯一的真相就在这一个布尔上：别在别处再挂一个"暂停"标志，
+## 否则"表在走"与"表被冻住"会分家。
 var running := false
 var _last_sec := -1
 
@@ -42,6 +45,13 @@ func set_number(n: int) -> void:
 
 func start() -> void: elapsed = 0.0; running = true; _last_sec = -1; set_number(0)
 func stop() -> void: running = false
+
+## 暂停 / 继续：playing <-> paused 之间来回用(设置抽屉的开关)。
+## 与 stop() 的区别只在语义上 —— 表停在半途、待会儿还要接着走；
+## **resume() 不像 start() 那样把 elapsed 归零**，这正是"恢复计时"要的。
+## _last_sec 也不动：恢复时当前这一秒还没走完，不会多响一声滴答。
+func pause() -> void: running = false
+func resume() -> void: running = true
 func reset() -> void: elapsed = 0.0; running = false; _last_sec = -1; set_number(0)   # 重开:回到 0 且不计时
 
 func display_size() -> Vector2:

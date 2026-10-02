@@ -32,6 +32,7 @@ func bind(b: Board) -> void:
 func _ready() -> void:
 	add_state(&"ready", ReadyState.new())
 	add_state(&"playing", PlayingState.new())
+	add_state(&"paused", PausedState.new())
 	add_state(&"won", WonState.new())
 	add_state(&"lost", LostState.new())
 
@@ -47,7 +48,20 @@ class ReadyState extends BaseState:
 ## 进行中：首击已翻开，计时中
 class PlayingState extends BaseState:
 	func _enter(_msg: Dictionary = {}) -> void:
-		(state_machine as GameStateMachine).timer.start()
+		var m := state_machine as GameStateMachine
+		# 从 paused 回来要**接着走**，不能调 start() 把 elapsed 归零。
+		# 判据用阶段机自己记的 previous_state，不让计时器去猜自己该不该归零。
+		if state_machine.previous_state == &"paused":
+			m.timer.resume()
+		else:
+			m.timer.start()
+
+## 暂停：设置抽屉盖着，表停在半途。
+## **停表这件事归阶段机**：开关抽屉只是请求一次迁移，计时器自己不持有"被挂起"标志。
+## 输入/相机/黄框的冻结不在这里 —— 那是 main 的 _apply_canvas_interaction 的事。
+class PausedState extends BaseState:
+	func _enter(_msg: Dictionary = {}) -> void:
+		(state_machine as GameStateMachine).timer.pause()
 
 ## 胜利：全非雷格已翻开
 class WonState extends BaseState:

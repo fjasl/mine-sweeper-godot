@@ -1,0 +1,8 @@
+[gd_resource type="FontVariation" format=3 uid="uid://d3yahjshnhwxf"]
+
+[ext_resource type="FontFile" uid="uid://b713ksq3bmjs8" path="res://ui/assets/fonts/ZCOOLKuaiLe-Regular.ttf" id="1_tx0i8"]
+
+[resource]
+base_font = ExtResource("1_tx0i8")
+variation_embolden = 0.71
+spacing_glyph = 1

@@ -1,0 +1,24 @@
+[gd_scene format=3 uid="uid://uq8bcy76qaut"]
+
+[ext_resource type="FontVariation" uid="uid://d3yahjshnhwxf" path="res://ui/fonts/base_font.tres" id="1_5usns"]
+
+[sub_resource type="LabelSettings" id="LabelSettings_7ykc4"]
+font = ExtResource("1_5usns")
+
+[node name="LineSettingOptionButton" type="HBoxContainer" unique_id=1953718923]
+
+[node name="Label" type="Label" parent="." unique_id=608816157]
+layout_mode = 2
+text = "语言"
+label_settings = SubResource("LabelSettings_7ykc4")
+
+[node name="OptionButton" type="OptionButton" parent="." unique_id=1702135424]
+custom_minimum_size = Vector2(160, 0)
+layout_mode = 2
+size_flags_horizontal = 10
+theme_override_fonts/font = ExtResource("1_5usns")
+theme_override_font_sizes/font_size = 14
+selected = 0
+item_count = 1
+popup/item_0/text = "英语"
+popup/item_0/id = 0
