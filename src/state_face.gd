@@ -32,21 +32,23 @@ func _ready() -> void:
 	set_state("normal")
 
 # 点笑脸 → 重开(对应原版的"点脸重开")。
-# 事件必须先到 GameObject 那侧：本节点在 Main.tscn 里排在 Board 之后，
-# _unhandled_input 按场景树反序传播，所以这里先拿到；命中后 set_input_as_handled()
-# 拦住事件，免得同一次点击又被棋盘当成"翻开格子"。
+# **只处理鼠标/触摸点击**：手柄 A 属于棋盘(翻开格子)，不在这里处理。
+# 本节点在 Main.tscn 里排在 Board 之后，而 _unhandled_input 按场景树反序传播，
+# 所以这里会**先于棋盘**拿到事件 —— 因此凡是本函数消费掉的事件，棋盘就再也收不到。
+# 这也是为什么必须严格限制命中条件：一旦条件恒成立，棋盘的 action_a 会被永久吞掉。
 func _unhandled_input(event: InputEvent) -> void:
-	if not event.is_action_pressed("action_a"):
+	# 只认**指针事件**。
+	# 绝不能用"手柄 A 键"来点笑脸：joypad 事件没有坐标，把它当成"点在笑脸自身"
+	# 会让命中测试恒成立；而本节点在场景树里排在 Board 之后，_unhandled_input
+	# 反序传播 → 笑脸会抢先把棋盘的 action_a 吃掉，表现为"手柄 A 一直重开、翻不开格子"。
+	# 手柄 A 的归属是棋盘(翻开)，不是笑脸。
+	if not (event is InputEventMouseButton):
 		return
-	# 取"点击点"的屏幕坐标。
-	# 必须显式收窄成鼠标事件：position 只在 InputEventMouse* 子类上是确定的 Vector2，
-	# 直接对基类 InputEvent 取 .position 得到的是 Variant，:= 推断不出来。
-	# 手柄 A 键(joypad)根本没有坐标 —— 那就把点击点算作笑脸自身所在位置。
-	var screen_pos: Vector2
-	if event is InputEventMouseButton:
-		screen_pos = (event as InputEventMouseButton).position
-	else:
-		screen_pos = get_viewport().get_canvas_transform() * get_global_position()
+	if not (event as InputEventMouseButton).is_action_pressed("action_a"):
+		return
+	# 点击点的屏幕坐标。position 只在 InputEventMouse* 子类上是确定的 Vector2，
+	# 所以上面先收窄类型，否则 := 推断不出类型。
+	var screen_pos: Vector2 = (event as InputEventMouseButton).position
 	# 用显式两段变换，不用 make_input_local()：后者对
 	# Input.parse_input_event() 注入的合成事件(移动端)并不等价，相机一动热区就偏
 	var world: Vector2 = get_viewport().get_canvas_transform().affine_inverse() * screen_pos
