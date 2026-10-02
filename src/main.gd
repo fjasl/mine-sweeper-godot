@@ -9,7 +9,7 @@ extends Node2D
 @onready var board: Board = $Background/Board
 @onready var timer: ScoreTimer = $Background/ScoreTimer
 @onready var counter: MineCounter = $Background/MineCounter
-@onready var face: Smiley = $Background/StateFace
+@onready var face: StateFace = $Background/StateFace
 @onready var settings_btn: TextureButton = $UILayer/SettingsButton
 @onready var settings_panel: SettingsPanel = $UILayer/SettingsPanel
 @onready var game_over_panel: GameOverPanel = $UILayer/GameOverPanel
@@ -67,6 +67,10 @@ func _ready() -> void:
 	settings_panel.apply_settings.connect(_apply_settings)
 	# 面板请求关闭(应用后 / 关闭按钮 / 手柄 B) → main 统一改 _menu_open
 	settings_panel.close_requested.connect(func(): _set_menu_open(false))
+
+	# 初始门控显式施加一次。上面那些开关的默认值恰好等于"无覆盖"，但那是巧合 ——
+	# 默认值一改就会静默走样，所以唯一入口必须在装配完成后被主动调一次。
+	_apply_canvas_interaction()
 
 
 # 唯一的新局路径：重铺棋盘 + 把阶段机推回 ready

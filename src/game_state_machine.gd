@@ -17,7 +17,7 @@ class_name GameStateMachine
 var board: Board
 var timer: ScoreTimer
 var counter: MineCounter
-var face: Smiley
+var face: StateFace
 var result_panel: GameOverPanel
 
 ## 由 main 注入棋盘事件：把"规则事件 → 阶段"的映射留在本文件里，

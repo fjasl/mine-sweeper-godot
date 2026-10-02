@@ -1,5 +1,5 @@
 extends TileMapLayer
-class_name Mines
+class_name MineField
 
 signal started                    # 第一次翻开后开始
 signal flags_changed(remaining: int)   # 剩余雷数变化
@@ -42,10 +42,6 @@ var revealed_count := 0
 func reveal_target() -> int:
 	return cols * rows - mine_count
 
-
-func _ready() -> void:
-	#start_game()
-	pass
 
 func start_game() -> void:
 	cells.clear()
@@ -113,21 +109,6 @@ func toggle_flag(cell: Vector2i) -> void:
 	flags_changed.emit(remaining_mines())
 
 # 双击已翻开的数字：周围旗数==数字时翻开周围（对应 StepBlock） 暂时不做实现
-#func chord(cell: Vector2i) -> void:
-	#if game_over or not cells[cell]["visit"]: return
-	#var num := _num(cell)
-	#if num == 0 or _flags_around(cell) != num: return
-	#for nb in _neighbors(cell):
-		#var st: Dictionary = cells[nb]
-		#if st["mark"] != 0: continue
-		#if st["mine"]:
-			#set_cell(nb, 0, TILE["mine_hit"])
-			#_game_over(false, nb)  
-			#return
-		#_step_box(nb)
-	#if revealed_count == reveal_target():
-		#_game_over(true)
-
 func in_bounds(c: Vector2i) -> bool:
 	return c.x >= 0 and c.y >= 0 and c.x < cols and c.y < rows
 
@@ -153,13 +134,6 @@ func _num(c: Vector2i) -> int:
 	var n := 0
 	for nb in _neighbors(c):
 		if cells[nb]["mine"]: n += 1
-	return n
-
-# 目前仅服务于已注释的 chord()；保留待和弦功能重启时复用
-func _flags_around(c: Vector2i) -> int:
-	var n := 0
-	for nb in _neighbors(c):
-		if cells[nb]["mark"] == 1: n += 1
 	return n
 
 func _neighbors(c: Vector2i) -> Array:

@@ -2,7 +2,7 @@
 
 [ext_resource type="Script" uid="uid://dafd5nl5bycp2" path="res://src/board.gd" id="1_g4f5c"]
 [ext_resource type="Texture2D" uid="uid://blu4fcwhq8sc1" path="res://Asset/blocks.bmp" id="2_3gt6m"]
-[ext_resource type="Script" uid="uid://3jke4n2ayufq" path="res://src/mines.gd" id="3_3gt6m"]
+[ext_resource type="Script" uid="uid://3jke4n2ayufq" path="res://src/mine_field.gd" id="3_3gt6m"]
 [ext_resource type="Script" uid="uid://c3gtueyy68ca6" path="res://src/cursor_overlay.gd" id="4_v8t1f"]
 
 [sub_resource type="TileSetAtlasSource" id="TileSetAtlasSource_v8t1f"]
@@ -30,9 +30,9 @@ sources/0 = SubResource("TileSetAtlasSource_v8t1f")
 [node name="Board" type="Node2D" unique_id=1465599577]
 script = ExtResource("1_g4f5c")
 
-[node name="Mines" type="TileMapLayer" parent="." unique_id=957408129]
+[node name="MineField" type="TileMapLayer" parent="." unique_id=957408129]
 tile_set = SubResource("TileSet_ro8xa")
 script = ExtResource("3_3gt6m")
 
-[node name="CursorOverlay" type="Node2D" parent="Mines" unique_id=199886871]
+[node name="CursorOverlay" type="Node2D" parent="MineField" unique_id=199886871]
 script = ExtResource("4_v8t1f")

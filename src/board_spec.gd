@@ -7,14 +7,14 @@ class_name BoardSpec
 ## 约定的写法。用 Resource 是为了将来把「每档难度」做成 .tres 预设，以及给最佳成绩
 ## 做序列化。
 ##
-## 约定：真相永远是 Mines 上的三个 int 字段，本类只是过路的信使 ——
+## 约定：真相永远是 MineField 上的三个 int 字段，本类只是过路的信使 ——
 ## 不要把它存起来当状态，否则就出现了第二个真相来源。
 
 @export var cols: int = 30
 @export var rows: int = 16
 @export var mine_count: int = 60
 
-# 规格约束(原先住在 mines.gd)：跟着数据走，UI 与逻辑都从这里取
+# 规格约束(原先住在 mine_field.gd)：跟着数据走，UI 与逻辑都从这里取
 const MIN_COLS := 9
 const MAX_COLS := 40
 const MIN_ROWS := 9

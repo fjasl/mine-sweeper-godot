@@ -277,7 +277,10 @@ func nudge_pointer(delta: Vector2) -> void:
 	var rect := get_viewport().get_visible_rect()
 	pointer_pos = (pointer_pos + delta).clamp(rect.position, rect.end)
 	_update_pointer()
-	_send_motion(pointer_pos, delta, MOUSE_BUTTON_MASK_LEFT if _held else 0)
+	# position 必须走 to_window()(GUI 命中测试在窗口空间)，而 relative 保持
+	# 视口逻辑坐标 —— 相机把 relative 当视口位移消费，两个字段不同空间是刻意的。
+	# 见 _send_motion 的说明。
+	_send_motion(to_window(pointer_pos), delta, MOUSE_BUTTON_MASK_LEFT if _held else 0)
 
 ## 本节点是否真的在管指针(桌面端门控关掉时为 false，
 ## 调用方应回退到引擎的真鼠标位置)
@@ -298,7 +301,7 @@ func _pan_camera(delta: Vector2) -> void:
 	if not _panning:
 		_panning = true
 		_fire_action(&"pan_drag", true)          # 相机靠这个动作锁存"正在拖"
-	_send_motion(gestures.tracker.centroid(), delta)
+	_send_motion(to_window(gestures.tracker.centroid()), delta)
 
 func _end_pan() -> void:
 	if _panning:
@@ -326,12 +329,16 @@ func _on_pinch_changed(factor: float, center: Vector2) -> void:
 	if absf(step - 1.0) < dead:
 		return
 	_last_pinch = factor
-	# 锚点必须换算成**窗口坐标**：zoom_by() 内部走 get_canvas_transform()，
-	# 那个变换吃的是窗口坐标(滚轮那条传 get_mouse_position() 正是如此)。
-	# 而 tracker.centroid() 给的是视口逻辑坐标，直接传会让缩放中心偏 1.5 倍，
-	# 表现为"缩放时画面整体位移、指针与内容错位"。
-	cam.zoom_by(step, to_window(center))
-	_log("pinch factor=%.3f step=%.4f center_vp=%s center_win=%s" % [factor, step, center, to_window(center)])
+	# 锚点**不换算**。zoom_by() 内部走 get_canvas_transform()，吃的正是这个空间
+	# (与 get_mouse_position() 同空间)；tracker.centroid() 来自 ScreenTouch/Drag，
+	# 引擎已经把它从窗口坐标换算成基准坐标了。再乘一次拉伸比会让缩放中心偏掉，
+	# 而且漏掉黑边偏移 —— 症状是"捏合时画面整体位移、光标与内容错位"。
+	# **别和本文件里的合成鼠标事件搞混**：Input.parse_input_event() 要的是**窗口坐标**
+	# (引擎会自己除掉拉伸比)，所以 _click()/_send_motion() 那几处必须保留 to_window()。
+	# 两条管线的空间不同，实测确认过。
+	cam.zoom_by(step, center)
+	_log("pinch factor=%.3f step=%.4f center_vp=%s center_win=%s" % [
+		factor, step, center, to_window(center)])
 
 func _on_pinch_ended(total_factor: float) -> void:
 	_last_pinch = 1.0
@@ -339,6 +346,12 @@ func _on_pinch_ended(total_factor: float) -> void:
 
 # ---- 合成事件的小工具 ----
 
+## 合成一次鼠标移动。
+##
+## **position 必须是窗口坐标**(GUI 命中测试在那边，出口统一过 to_window())；
+## 而 relative 保持**视口逻辑坐标** —— 相机把它当视口位移消费
+## (camera_2d.gd 的平移分支：position -= event.relative / zoom)。
+## 两个字段处在不同空间是刻意的，别为了"看起来统一"顺手一起换算。
 func _send_motion(pos: Vector2, relative := Vector2.ZERO, mask := 0) -> void:
 	var e := InputEventMouseMotion.new()
 	e.position = pos

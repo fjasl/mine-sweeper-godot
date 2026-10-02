@@ -30,7 +30,12 @@ func _ready():
 # 整块棋盘的包围尺寸（本地 (0,0) 就是绘制原点）
 func board_size() -> Vector2:
 	var totalWidth: int = outerHighlightThickness + leftBorderThickness + boardBevelThickness + cellSize * boardColumns + boardBevelThickness + rightBorderThickness
-	var totalHeight: int = outerHighlightThickness + middleTopBorderThickness + scoreboardBevelThickness + scoreboardHeight + scoreboardBevelThickness + middleCenterBorderThickness + boardBevelThickness + cellSize * boardRows + boardBevelThickness + middleBottomBorderThickness
+	# 高度 = 外圈高光 + 计分板上方留白 + 计分板 + 中间留白 + 棋盘面板 + 底部留白。
+	# **不能把 scoreboardBevelThickness 再加进来**：两块面板的斜切都是画在各自矩形
+	# 内部的(_draw_panel_bevel 的多边形不会超出传入的 [p, p+size])，计分板的绘制
+	# 高度就是 scoreboardHeight。棋盘那侧不同 —— boardBevelThickness 已经算进了
+	# 棋盘面板的 boardWidth/boardHeight，所以这里要显式加两次。
+	var totalHeight: int = outerHighlightThickness + middleTopBorderThickness + scoreboardHeight + middleCenterBorderThickness + boardBevelThickness + cellSize * boardRows + boardBevelThickness + middleBottomBorderThickness
 	return Vector2(totalWidth, totalHeight)
 
 func board_grid_origin() -> Vector2:
@@ -95,8 +100,8 @@ func _draw():
 	_draw_panel_bevel(boardStartPoint, Vector2(boardWidth, boardHeight), boardBevelThickness)
 
 
-# 绘制一块凸起面板的边框：
-# 上/左 亮色(阴影)，下/右 亮色(高光)。在「左下角」和「右上角」这两处
+# 绘制一块**凹陷**面板的边框(计分板与棋盘都是"刻进去"的观感，与原版一致)：
+# 上/左 用 COLOR_SHADOW、下/右 用 COLOR_HIGHLIGHT —— 光假设从左上来，凹陷就是"上暗下亮"。在「左下角」和「右上角」这两处
 # 阴影条与高光条相接的角落，用 45° 斜边衔接，而不是两个矩形直接直角覆盖。
 func _draw_panel_bevel(p: Vector2, size: Vector2, bevel: int) -> void:
 	var x0: float = p.x

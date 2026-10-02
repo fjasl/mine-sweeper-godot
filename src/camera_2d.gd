@@ -12,21 +12,26 @@ class_name GameCamera
 var _panning := false      # 中键拖动是否进行中(供 board 的鼠标跟随让路)
 var _bounds := Rect2()     # 相机中心允许活动的世界矩形(棋盘面板)，由 main 同步
 var _input_enabled := true # 用户输入是否生效(设置面板打开时由 main 关掉)
+## 缩放锚点(**视口逻辑坐标**)，由 Board 每帧同步进来。
+## 刻意不自己读 get_viewport().get_mouse_position()：移动端合成事件不更新引擎记录的
+## 鼠标位置，读它只会拿到 0/陈旧值，而手柄右摇杆走的正是 zoom_in/zoom_out ——
+## 锚点会乱飞。桌面端 Board 同步进来的就是系统鼠标位置，行为与以前一致。
+var _zoom_anchor := Vector2.ZERO
+## 锚点是否已被同步过。没同步过时退回读系统鼠标，免得锚点停在 (0,0) 左上角。
+var _has_zoom_anchor := false
 
 func _process(delta: float) -> void:
 	# 平移：ui_* 内置 action(拖动期间不叠加键盘平移，免得两个来源抢方向)。
-	# 语义：按哪个方向的键，**相机就往那个方向走**(视野朝该方向推进)。
-	# 注意这与"按住中键拖动"的手感不同 —— 那里是抓住内容拖，相机要反向移动；
-	# 键盘平移属于"移动镜头"，同向才符合直觉。
+	# 语义：推哪个方向，相机就往那个方向走(视野朝该方向推进)。
 	if _input_enabled and not _panning:
 		position += Input.get_vector("ui_left","ui_right","ui_up","ui_down") * move_speed * delta
 
 	# 缩放：自定义 action，滚轮每滚一格是"刚按下"，用 is_action_just_pressed
 	if _input_enabled:
 		if Input.is_action_just_pressed("zoom_in"):
-			_zoom_at_mouse(zoom_step)
+			_zoom_at_anchor(zoom_step)
 		if Input.is_action_just_pressed("zoom_out"):
-			_zoom_at_mouse(1.0 / zoom_step)
+			_zoom_at_anchor(1.0 / zoom_step)
 
 	_clamp_to_bounds()
 
@@ -81,24 +86,45 @@ func _clamp_to_bounds() -> void:
 		return
 	position = position.clamp(_bounds.position, _bounds.end)
 
-# 以光标为锚点缩放(比以画面中心缩放更符合直觉)
-# 只给桌面滚轮用：滚轮位置就是系统鼠标位置。触摸设备上"鼠标位置"没有意义
-# (合成事件不会更新它)，捏合必须走 zoom_by() 显式传捏合中心。
-func _zoom_at_mouse(f: float) -> void:
-	zoom_by(f, get_viewport().get_mouse_position())
+## 同步缩放锚点(**视口逻辑坐标**)。调用方是 Board —— 它才是"虚拟光标此刻在哪"
+## 的知情者(桌面端=系统鼠标，移动端=TouchBindings 的虚拟指针)。
+## Board 在场景树里排在 Camera2D 之前，_process 同帧先跑，所以这里读到的一定是本帧位置。
+func set_zoom_anchor(viewport_pos: Vector2) -> void:
+	_zoom_anchor = viewport_pos
+	_has_zoom_anchor = true
 
-# 按比例缩放，以 window_anchor(**窗口坐标**) 为锚点。
+# 以虚拟光标为锚点缩放(比以画面中心缩放更符合直觉)：光标底下那个点保持不动。
+# **锚点直接喂，不要做任何拉伸换算**。实测(1600x900 窗口 / 1280x720 基准)：
+#   get_canvas_transform().affine_inverse() * get_viewport().get_mouse_position()
+# 与引擎自己的 get_global_mouse_position() 逐位相等；而"鼠标在窗口内的真实像素"
+# 与 get_mouse_position() 的比值正好是拉伸比 1.25 —— 说明 get_mouse_position() 给的
+# 就是**基准(视口逻辑)坐标**，get_canvas_transform() 吃的也正是这个空间。
+# board.gd 的 _screen_to_local()(黄框跟随，本来就正确)用的同样是这个原始位置。
+# 这里一旦过 _viewport_to_window()，就会凭空多乘一个拉伸比、又漏掉黑边偏移，
+# 症状正是"锚点靠近光标但不重合，光标所在的格子照样移位"。
+func _zoom_at_anchor(f: float) -> void:
+	zoom_by(f, _anchor_viewport())
+
+# 当前锚点(与 get_viewport().get_mouse_position() 同一空间)。还没被同步过时
+# 退回系统鼠标位置，保持旧行为。
+func _anchor_viewport() -> Vector2:
+	if _has_zoom_anchor:
+		return _zoom_anchor
+	return get_viewport().get_mouse_position()
+
+# 按比例缩放，以 anchor(**与 get_viewport().get_mouse_position() 同一空间**)为锚点。
 #
-# **锚点必须是窗口坐标**：内部走 get_canvas_transform()，那个变换吃的是窗口坐标
-# (滚轮那条用 get_mouse_position()，正是同一空间)。
-# 触摸侧拿到的是视口逻辑坐标，喂进来之前要先换算(TouchBindings.to_window())，
-# 否则缩放中心会偏一个拉伸比，表现为"缩放时画面整体位移、指针与内容错位"。
-func zoom_by(factor: float, window_anchor: Vector2) -> void:
-	var before := _world_at(window_anchor)
+# 形参刻意不叫 window_anchor：它**不是**窗口坐标，别再按"窗口坐标"去换算它。
+# 内部走 get_canvas_transform()，那个变换吃的正是这个空间(见 _world_at)。
+# **调用方一律不要再做拉伸换算** —— 多乘一个比例会让锚点偏掉。
+func zoom_by(factor: float, anchor: Vector2) -> void:
+	var before := _world_at(anchor)
 	zoom = (zoom * factor).clamp(Vector2(min_zoom, min_zoom), Vector2(max_zoom, max_zoom))
-	position += before - _world_at(window_anchor)
+	position += before - _world_at(anchor)
 	_clamp_to_bounds()
 
-# 窗口坐标 → 世界坐标(与 Node2D.get_global_mouse_position() 同一套算法)
-func _world_at(screen_pos: Vector2) -> Vector2:
-	return get_canvas_transform().affine_inverse() * screen_pos
+# 锚点空间 → 世界坐标。与引擎 CanvasItem.get_global_mouse_position() 是同一套算法
+# (就是 get_canvas_transform().affine_inverse() * get_mouse_position())，
+# 所以喂进来的锚点必须与 get_mouse_position() 同空间，**不要**先换成窗口坐标。
+func _world_at(anchor: Vector2) -> Vector2:
+	return get_canvas_transform().affine_inverse() * anchor

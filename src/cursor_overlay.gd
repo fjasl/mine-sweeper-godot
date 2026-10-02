@@ -1,5 +1,5 @@
 extends Node2D
-class_name Cursor
+class_name CursorOverlay
 
 @export var color := Color(1, 0.9, 0.3)
 @export var line_width := 2.0

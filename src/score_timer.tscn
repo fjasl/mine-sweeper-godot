@@ -21,4 +21,3 @@ texture = ExtResource("2_delci")
 region_enabled = true
 region_rect = Rect2(0, 0, 13, 23)
 
-[node name="Timer" type="Timer" parent="." unique_id=2084170587]

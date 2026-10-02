@@ -6,21 +6,22 @@ signal flags_changed(remaining: int)
 signal won
 signal lost
 
-@onready var mines: Mines = $Mines
-@onready var cursor: Cursor = $Mines/CursorOverlay
+@onready var mines: MineField = $MineField
+@onready var cursor: CursorOverlay = $MineField/CursorOverlay
 
 ## 触控板指针的唯一真值所在。桌面端它是"未接管"状态，
 ## 此时回退到引擎的真鼠标位置，两种平台走同一条分支。
 @onready var touch: TouchBindings = get_node_or_null("/root/Main/TouchBindings")
+## 相机。缩放锚点每帧由这里同步进去(滚轮缩放要锚在虚拟光标上)。
+@onready var cam: GameCamera = get_node_or_null("/root/Main/Camera2D")
 
 var cursor_cell := Vector2i.ZERO
 
 ## 本帧指针是否落在棋盘内。为 false 时点击无效(顺带堵掉"指针在棋盘外，
 ## 点到的却是上一次残留的那一格"这个坑)
+## **只对指针点击生效**：手柄 A/B 与 InputEventAction(移动端双指插旗)没有坐标，
+## 由 _may_act_on_cursor 直接放行，不受这个标志约束。
 var _pointer_on_board := true
-
-## 黄框跟随是否被暂停(有 UI 覆盖时为 true)
-var _tracking_paused := false
 
 func _ready() -> void:
 	mines.start_game()
@@ -41,6 +42,13 @@ func _ready() -> void:
 #     是错的，所以位置统一从 TouchBindings 取。
 func _process(_delta: float) -> void:
 	_update_cursor_from_pointer()
+	# 缩放锚点跟着指针走(相机在缩放时保持这个点不动)。
+	# 用**指针**而不是黄框所在格的中心：指针是连续量，缩放时画面不会一格一格地跳，
+	# 而黄框本来就是这个指针所在的那一格。
+	# 桌面端 _pointer_viewport_pos() 回退到系统鼠标位置，行为与以前一致；
+	# 移动端它才是真正的虚拟光标(TouchBindings 持有)。
+	if cam != null:
+		cam.set_zoom_anchor(_pointer_viewport_pos())
 
 ## 指针的**视口坐标** —— 画布(棋盘/世界)这一侧要的是这个空间。
 ## GUI 命中测试要的是窗口坐标(见 pointer_window_pos)，两者差一个拉伸比，
@@ -57,7 +65,6 @@ func _pointer_viewport_pos() -> Vector2:
 ## 而合成事件又确实会改变引擎内部记录的鼠标位置 —— 变量太多。
 ## 这里只用三个确定量：相机屏幕中心、zoom、视口矩形。
 func _screen_to_local(viewport_pos: Vector2) -> Vector2:
-	var cam := get_viewport().get_camera_2d()
 	if cam == null:
 		return to_local(viewport_pos)
 	var vis := get_viewport().get_visible_rect()
@@ -73,13 +80,10 @@ func _screen_to_local(viewport_pos: Vector2) -> Vector2:
 ## 刻意不把"何时暂停"写死在 Board 里：调用方是 main(菜单开关)与
 ## GameStateMachine(对局阶段)，它们才是"当前有没有 UI 覆盖"的知情者。
 func pause_tracking(paused: bool) -> void:
-	_tracking_paused = paused
 	set_process(not paused)
-	if paused:
-		# 冻结期间指针可能一直在界外，恢复时别让界外状态影响第一次点击
-		_pointer_on_board = false
-	else:
+	if not paused:
 		# 立即对齐一次，免得恢复后要等下一帧才追上指针
+		# (顺带重算 _pointer_on_board，所以冻结期间不需要专门去清它)
 		_update_cursor_from_pointer()
 
 func _update_cursor_from_pointer() -> void:
@@ -101,15 +105,19 @@ func _unhandled_input(event: InputEvent) -> void:
 	# 翻开 / 插旗。
 	# 放在方向键判断**之前**：两者可能同时命中同一个手柄按键，
 	# 而"动作"比"移动光标"更该生效(否则一次按下只挪格子、不翻开，看起来就像失效)。
-	# 这里**不看 _pointer_on_board**：那个标志是给"指针点击"用的(指针在棋盘外时
-	# 不该翻到上一次残留的格子)，但 action_a/action_b 同时也绑着手柄 A/B，
-	# 手柄与指针无关 —— 加上这个条件会直接让手柄按 A 失效。
+	# 这里**按事件类型分流**：带坐标的(鼠标点击 / 移动端合成的点击)必须在棋盘内，
+	# 不带坐标的(手柄 A/B、InputEventAction)一律放行 —— 见 _may_act_on_cursor。
+	# 一刀切地看 _pointer_on_board 会让手柄按 A 直接失效。
 	if event.is_action_pressed("action_a"):
-		mines.reveal(cursor_cell)
-		get_viewport().set_input_as_handled()
+		if _may_act_on_cursor(event):
+			mines.reveal(cursor_cell)
+			get_viewport().set_input_as_handled()
 	elif event.is_action_pressed("action_b"):
-		mines.toggle_flag(cursor_cell)
-		get_viewport().set_input_as_handled()
+		if _may_act_on_cursor(event):
+			mines.toggle_flag(cursor_cell)
+			get_viewport().set_input_as_handled()
+	# 被 _may_act_on_cursor 挡掉时**刻意不** set_input_as_handled()：
+	# 那一次什么都没做，没有理由把它从事件管线里吞掉。
 
 	# 移动光标：方向键 / 手柄 dpad。
 	# 走 nudge_pointer() 而不是直接改 cursor_cell —— 黄框每帧由指针位置算出来，
@@ -123,6 +131,22 @@ func _unhandled_input(event: InputEvent) -> void:
 		_nudge(Vector2i(0, -1))
 	elif event.is_action_pressed("move_down"):
 		_nudge(Vector2i(0, 1))
+
+# 这一次"动作"是否允许作用在当前选中格上。
+#
+# 分流依据是**事件带不带坐标**，而不是一刀切地看 _pointer_on_board：
+#  - 鼠标事件(桌面左键 / 移动端 TouchBindings 合成的点击)带坐标 → 要求指针
+#    此刻在棋盘内。否则指针移到棋盘外再点，翻开的会是上一次残留的那一格。
+#  - 手柄 A/B 与 InputEventAction(移动端双指轻点插旗)没有坐标，与指针无关 → 放行。
+#
+# 这里读**上一帧**的 _pointer_on_board，而不是拿事件坐标现算一格出来：
+# cursor_cell 也是由同一条 _process 路径推出来的，两者同源同延迟，于是
+# "允许作用"与"作用在哪一格"必然一致；现算反而会引入第二套"屏幕点 → 世界点"
+# 的推导(项目里已经有这个隐患了，不再添一处)。
+func _may_act_on_cursor(event: InputEvent) -> bool:
+	if event is InputEventMouseButton:
+		return _pointer_on_board
+	return true
 
 # 按"一格"推动虚拟指针。
 # nudge_pointer() 收的是**视口逻辑坐标**(和 pointer_pos 同一个空间)，

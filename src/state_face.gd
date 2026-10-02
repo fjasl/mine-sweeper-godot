@@ -1,5 +1,5 @@
 extends Node2D
-class_name Smiley
+class_name StateFace
 
 signal restart_requested
 
