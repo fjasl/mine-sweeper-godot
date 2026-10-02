@@ -14,6 +14,11 @@ const LED := {
 
 @onready var d: Array = [$D0, $D1, $D2]
 
+## 当前显示的逻辑值(可为负 = 旗插多了)。Sprite2D 只体现 region_rect，外部看不见，
+## 所以在自己这儿留一份 —— 这样"状态栏显示得对不对"是可断言的事实(探针/调试用)，
+## 而不是只能靠截图去看。注意它是**逻辑值**：显示时会取绝对值并夹到 ±999。
+var value := 0
+
 func _ready() -> void:
 	for i in 3:
 		d[i].centered = false                     # 以左上角为锚点
@@ -22,6 +27,7 @@ func _ready() -> void:
 
 # n 可为负：剩余雷数 = 总雷数 - 已插旗数
 func set_number(n: int) -> void:
+	value = n
 	var neg := n < 0
 	n = absi(n)
 	n = mini(n, 999)

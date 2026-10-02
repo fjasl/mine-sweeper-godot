@@ -139,6 +139,7 @@ func _ready() -> void:
 	# 这里刻意用节点级：不动 project.godot，旧面板以外的地方不受影响)
 	theme = UI_THEME
 	_build_ui()
+	set_process(false)              # 安全网只在真有临时键位时跑，见 _process
 	hide()
 
 
@@ -185,9 +186,13 @@ func _build_ui() -> void:
 	vb.add_child(_make_preset_row())
 
 	# 范围与跨字段约束一律取自 BoardSpec，界面不自带第二份副本
-	_col_row  = _make_slider_row("列数", " 列", BoardSpec.MIN_COLS, BoardSpec.MAX_COLS, 30)
-	_row_row  = _make_slider_row("行数", " 行", BoardSpec.MIN_ROWS, BoardSpec.MAX_ROWS, 16)
-	_mine_row = _make_slider_row("雷数", " 雷", 1, 999, 60)
+	# 滑条初值取自 BoardSpec 的默认值(= 原版初级)，不在本文件里另写一份 ——
+	# 面板并不接收棋盘当前规格(apply_settings 只是发出去给 main 的信号)，
+	# 所以这份初值必须和棋盘默认一致，否则一按"应用"就会把棋盘改掉。
+	var def := BoardSpec.new()
+	_col_row  = _make_slider_row("列数", " 列", BoardSpec.MIN_COLS, BoardSpec.MAX_COLS, def.cols)
+	_row_row  = _make_slider_row("行数", " 行", BoardSpec.MIN_ROWS, BoardSpec.MAX_ROWS, def.rows)
+	_mine_row = _make_slider_row("雷数", " 雷", 1, 999, def.mine_count)
 	vb.add_child(_col_row)
 	vb.add_child(_row_row)
 	vb.add_child(_mine_row)
@@ -361,6 +366,7 @@ func _bind_pad_for_popup(enable: bool) -> void:
 			if ev != null:
 				InputMap.action_erase_event(action, ev)
 		_pad_added.clear()
+		set_process(false)              # 没有键位要守了，安全网也跟着停
 		return
 	for action in POPUP_PAD:
 		if _find_pad_event(action, POPUP_PAD[action]) != null:
@@ -369,6 +375,8 @@ func _bind_pad_for_popup(enable: bool) -> void:
 		e.button_index = POPUP_PAD[action]
 		InputMap.action_add_event(action, e)
 		_pad_added.append(action)
+	# 只有真的补进了键位，才需要每帧盯着"弹窗有没有被别的方式收掉"
+	set_process(not _pad_added.is_empty())
 
 ## 按**按钮号**找已有绑定。不能用 InputMap.action_has_event()：
 ## 那个比的是 Ref 的对象身份，拿一个新建的等价事件去问永远返回 false。

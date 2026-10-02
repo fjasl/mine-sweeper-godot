@@ -13,6 +13,8 @@ extends Node2D
 @onready var settings_btn: Button = $UILayer/SettingsButton
 @onready var settings_panel: SettingsPanel = $UILayer/SettingsPanel
 @onready var game_over_panel: GameOverPanel = $UILayer/GameOverPanel
+## 夜空背景(自己画的流星)。**只被喂值**：进度来自 Board，色调来自阶段机
+@onready var sky: NightSky = $Backdrop/Sky
 
 var _sm: GameStateMachine      # 对局阶段机：ready → playing → won/lost
 var _menu_open := false        # 菜单是否开着：唯一真相，供输入门控使用
@@ -42,12 +44,24 @@ func _ready() -> void:
 
 	# 与阶段无关的接线
 	board.flags_changed.connect(func(r): counter.set_number(r))
+	# 翻开进度 → 背景(0..1)。信号是**每次成功翻开才发一次**(不是每帧轮询)，
+	# 所以背景的"互动"只花在玩家真的动了棋盘的时候
+	board.progress_changed.connect(func(r: float) -> void: sky.set_progress(r))
 	# 阶段变化 → 黄框是否跟随：只有"进行中"才需要跟指针。
 	# ready(待首击)、won/lost(结算弹窗)都会盖住/等待操作，此时黄框应当停住
 	# (黄框是"下一击作用在哪"的指示器，背后乱跑会让人误判)。
 	_sm.state_changed.connect(_on_game_state_changed)
 	# 计时器每跳一秒 → 滴答声
 	timer.ticked.connect(func(): CoreSystem.audio_manager.play_sound("res://Asset/tick.wav"))
+
+	# 音效预热。audio_manager.play_sound(路径) 是**首次调用才同步 load()**，
+	# 之后才进它自己的字典缓存(audio_manager.gd:_get_audio_resource) ——
+	# 所以"第一次滴答 / 第一次胜利 / 第一次踩雷"那一下会卡在读盘上。
+	# 这里开局就把三个音效灌进它的缓存：用的是 addon 自己的 preload_audio()，
+	# 不在项目里另搞一份缓存，也不走 resource_manager(那条路的 LAZY 语义是坏的)。
+	# 注意路径要和下面 game_state_machine.gd 里 play_sound 的三处保持一致。
+	for sound in ["res://Asset/tick.wav", "res://Asset/win.wav", "res://Asset/explode.wav"]:
+		CoreSystem.audio_manager.preload_audio(sound, CoreSystem.AudioManager.AudioType.SOUND_EFFECT)
 
 	# 再来一次(_restart 内部已收起弹窗)
 	game_over_panel.play_again.connect(_restart)
@@ -71,6 +85,9 @@ func _ready() -> void:
 	# 初始门控显式施加一次。上面那些开关的默认值恰好等于"无覆盖"，但那是巧合 ——
 	# 默认值一改就会静默走样，所以唯一入口必须在装配完成后被主动调一次。
 	_apply_canvas_interaction()
+	# 背景的初始值同样显式喂一次(理由同上：默认恰好正确只是巧合，不是契约)
+	sky.set_progress(board.revealed_progress())
+	sky.set_phase(_sm.get_current_state_name())
 
 
 # 唯一的新局路径：重铺棋盘 + 把阶段机推回 ready
@@ -88,6 +105,9 @@ func _restart() -> void:
 ## 部件之间的接线留在装配处，和 bind() 的用意一致。
 func _on_game_state_changed(_from: BaseState, to: BaseState) -> void:
 	_apply_canvas_interaction()
+	# 背景换调跟着阶段走(进行中 / 通关 / 失败)。放在这里而不是各状态的 _enter 里：
+	# 和上面那条一样，部件之间的接线留在装配处，状态不需要知道背景的存在
+	sky.set_phase(_sm.get_current_state_name())
 
 ## 画布侧交互的统一门控(唯一入口)。
 ##

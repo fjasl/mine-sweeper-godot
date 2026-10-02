@@ -10,9 +10,11 @@ class_name BoardSpec
 ## 约定：真相永远是 MineField 上的三个 int 字段，本类只是过路的信使 ——
 ## 不要把它存起来当状态，否则就出现了第二个真相来源。
 
-@export var cols: int = 30
-@export var rows: int = 16
-@export var mine_count: int = 60
+## 默认值 = 原版「初级」。这里是**默认值的唯一出处**：设置面板的滑条初值也从这儿取，
+## 免得两边各写一份、改一边就悄悄跑偏(面板并不接收棋盘当前规格，只靠自己这份初值)。
+@export var cols: int = 9
+@export var rows: int = 9
+@export var mine_count: int = 10
 
 # 规格约束(原先住在 mine_field.gd)：跟着数据走，UI 与逻辑都从这里取
 const MIN_COLS := 9

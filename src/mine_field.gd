@@ -5,10 +5,11 @@ signal started                    # 第一次翻开后开始
 signal flags_changed(remaining: int)   # 剩余雷数变化
 signal won
 signal lost
+signal revealed_changed(revealed: int)  # 翻开进度变化(每成功翻开一次发一次，不是每格)
 
-@export var cols := 30
-@export var rows := 16
-@export var mine_count := 60
+@export var cols := 9
+@export var rows := 9
+@export var mine_count := 10
 
 # 规格约束(范围、跨字段约束)全部搬到 BoardSpec 了 —— 那里是"规格"的家，
 # 设置面板的 SpinBox 范围与 Board.apply_spec 的校验都从它取
@@ -52,6 +53,7 @@ func start_game() -> void:
 			cells[Vector2i(x,y)] = {"mine": false, "visit": false, "mark": 0}
 	_place_mines()
 	fill_covered()
+	revealed_changed.emit(revealed_count)   # 新局：进度归零，背景跟着回起点
 
 
 func fill_covered() -> void:
@@ -85,6 +87,9 @@ func reveal(cell: Vector2i) -> void:
 			_game_over(false, cell)  
 			return
 	_step_box(cell)
+	# 进度信号：一次点击只发一次(洪泛翻开的那些格不逐格发)，并且**排在通关判定之前** ——
+	# 这样"背景铺满"和"通关换调"是先后两个动作，不会挤在同一帧里互相盖掉
+	revealed_changed.emit(revealed_count)
 	if first:
 		started.emit()
 	if revealed_count == reveal_target():

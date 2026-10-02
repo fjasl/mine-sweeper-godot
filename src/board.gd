@@ -5,6 +5,7 @@ signal started
 signal flags_changed(remaining: int)
 signal won
 signal lost
+signal progress_changed(ratio: float)   # 翻开进度(0..1)：给背景用，main 转给 backdrop
 
 @onready var mines: MineField = $MineField
 @onready var cursor: CursorOverlay = $MineField/CursorOverlay
@@ -41,6 +42,8 @@ func _ready() -> void:
 	mines.flags_changed.connect(func(r): flags_changed.emit(r))
 	mines.won.connect(func(): won.emit())
 	mines.lost.connect(func(): lost.emit())
+	# 进度同样只转发"比例"，不让 main 去钻 board.mines 算
+	mines.revealed_changed.connect(func(_n: int): progress_changed.emit(revealed_progress()))
 
 # 黄框跟随指针。
 #
@@ -200,6 +203,14 @@ func spec() -> BoardSpec:
 # 有了它，main 就不必再直接钻 board.mines —— Board 的对外接口只留一条路
 func remaining_mines() -> int:
 	return mines.remaining_mines()
+
+# 翻开进度(0..1) = 已翻开数 / 通关所需数。和 remaining_mines() 一样"由 Board 代传"，
+# 调用方(main → 背景)不必知道 mines 内部怎么算
+func revealed_progress() -> float:
+	var target: int = mines.reveal_target()
+	if target <= 0:
+		return 0.0
+	return clampf(float(mines.revealed_count) / float(target), 0.0, 1.0)
 
 # 改规格：只负责数据，不开局。返回是否真的变了
 # (形参叫 wanted 而不是 spec，免得和上面的 spec() 方法重名)

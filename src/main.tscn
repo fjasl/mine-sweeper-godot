@@ -7,18 +7,15 @@
 [ext_resource type="PackedScene" uid="uid://crl57boekoxaw" path="res://src/score_timer.tscn" id="4_4i22m"]
 [ext_resource type="PackedScene" uid="uid://ctii1w0xso3aj" path="res://src/mine_counter.tscn" id="5_5mjca"]
 [ext_resource type="PackedScene" uid="uid://hjljqr3jiy3b" path="res://src/state_face.tscn" id="6_lo4dc"]
+[ext_resource type="PackedScene" uid="uid://dpd2hwh8rldn5" path="res://ui/scenes/backdrop.tscn" id="7_backdrop"]
 [ext_resource type="PackedScene" uid="uid://c2gw8tsk62yka" path="res://ui.tscn" id="8_sus66"]
 [ext_resource type="Script" uid="uid://i1hd07q25m37" path="res://src/touch_bindings.gd" id="9_bind"]
 [ext_resource type="Script" uid="uid://odmlh7w442hm" path="res://addons/touch_gestures/touch_gestures.gd" id="9_gest"]
-[ext_resource type="PackedScene" path="res://ui/scenes/backdrop.tscn" id="7_backdrop"]
 
 [node name="Main" type="Node2D" unique_id=289937505]
 script = ExtResource("1_ydgul")
 
-; 模板那块星形滚动背景：layer = -1 的 CanvasLayer，画在世界画布(层 0)后面，
-; 所以棋盘/HUD/抽屉都还在它上面；两层全屏 Control 已经在 backdrop.tscn 里设了
-; mouse_filter = IGNORE，不会吃输入。
-[node name="Backdrop" parent="." instance=ExtResource("7_backdrop")]
+[node name="Backdrop" parent="." unique_id=1916373106 instance=ExtResource("7_backdrop")]
 
 [node name="Background" type="Node2D" parent="." unique_id=105807495]
 position = Vector2(640, 360)
@@ -41,6 +38,7 @@ script = ExtResource("9_gest")
 
 [node name="TouchBindings" type="Node" parent="." unique_id=1031064708]
 script = ExtResource("9_bind")
+debug_log = false
 
 [node name="UILayer" parent="." unique_id=1560602418 instance=ExtResource("8_sus66")]
 
