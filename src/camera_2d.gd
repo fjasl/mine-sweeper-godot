@@ -1,4 +1,5 @@
 extends Camera2D
+class_name GameCamera
 
 # 注意：不要把 position_smoothing_enabled 打开。中键拖动属于"直接操作"，
 # 位置平滑会让它变成拖一块有弹性的布；平滑适合留给"跳到目标点"的场合。
@@ -10,22 +11,28 @@ extends Camera2D
 
 var _panning := false      # 中键拖动是否进行中(供 board 的鼠标跟随让路)
 var _bounds := Rect2()     # 相机中心允许活动的世界矩形(棋盘面板)，由 main 同步
+var _input_enabled := true # 用户输入是否生效(设置面板打开时由 main 关掉)
 
 func _process(delta: float) -> void:
 	# 平移：ui_* 内置 action(拖动期间不叠加键盘平移，免得两个来源抢方向)
 	# 语义与中键拖动一致：按哪个方向，画面内容就往哪个方向走
-	if not _panning:
+	if _input_enabled and not _panning:
 		position -= Input.get_vector("ui_left","ui_right","ui_up","ui_down") * move_speed * delta
 
 	# 缩放：自定义 action，滚轮每滚一格是"刚按下"，用 is_action_just_pressed
-	if Input.is_action_just_pressed("zoom_in"):
-		_zoom_at_mouse(zoom_step)
-	if Input.is_action_just_pressed("zoom_out"):
-		_zoom_at_mouse(1.0 / zoom_step)
+	if _input_enabled:
+		if Input.is_action_just_pressed("zoom_in"):
+			_zoom_at_mouse(zoom_step)
+		if Input.is_action_just_pressed("zoom_out"):
+			_zoom_at_mouse(1.0 / zoom_step)
 
 	_clamp_to_bounds()
 
 func _unhandled_input(event: InputEvent) -> void:
+	# 门控只挡"用户操作"，不挡 main 的 set_world_bounds()/zoom_by() 这类程序调用
+	if not _input_enabled:
+		return
+
 	# 按住中键拖动平移：press/release 各锁存一次状态，不每帧轮询按键
 	# (轮询在"松开时窗口失焦"的情况下会把状态粘住)
 	if event.is_action_pressed("pan_drag"):
@@ -48,6 +55,16 @@ func _notification(what: int) -> void:
 func is_panning() -> bool:
 	return _panning
 
+# 用户输入总开关：设置面板打开时 main 关掉它，菜单期间滚轮缩放与摇杆平移都不生效。
+# 用"传值"而不是"通知"，是为了和 board.set_process_unhandled_input() 同一套意图：
+# main 是唯一知道菜单开没开的地方，相机自己不持有那个布尔
+func set_input_enabled(active: bool) -> void:
+	_input_enabled = active
+	if not active:
+		# 正在中键拖动时被关掉(面板被手柄/空格唤出)，得顺手松开，
+		# 否则摇杆平移虽被挡住，_panning 会一直粘着到下一次拖动
+		_panning = false
+
 # 设定相机中心允许活动的范围(棋盘面板的世界矩形)，main 在每次重排时同步
 func set_world_bounds(r: Rect2) -> void:
 	_bounds = r
@@ -63,7 +80,19 @@ func _clamp_to_bounds() -> void:
 	position = position.clamp(_bounds.position, _bounds.end)
 
 # 以光标为锚点缩放(比以画面中心缩放更符合直觉)
+# 只给桌面滚轮用：滚轮位置就是系统鼠标位置。触摸设备上"鼠标位置"没有意义
+# (合成事件不会更新它)，捏合必须走 zoom_by() 显式传捏合中心。
 func _zoom_at_mouse(f: float) -> void:
-	var before := get_global_mouse_position()
-	zoom = (zoom * f).clamp(Vector2(min_zoom, min_zoom), Vector2(max_zoom, max_zoom))
-	position += before - get_global_mouse_position()
+	zoom_by(f, get_viewport().get_mouse_position())
+
+# 按比例缩放，并以 screen_anchor(视口坐标) 为锚点。
+# 触摸的捏合走这里 —— 滚轮那条路锚在"鼠标位置"，触摸设备上那个位置没有意义。
+func zoom_by(factor: float, screen_anchor: Vector2) -> void:
+	var before := _world_at(screen_anchor)
+	zoom = (zoom * factor).clamp(Vector2(min_zoom, min_zoom), Vector2(max_zoom, max_zoom))
+	position += before - _world_at(screen_anchor)
+	_clamp_to_bounds()
+
+# 视口坐标 → 世界坐标(与 Node2D.get_global_mouse_position() 同一套算法)
+func _world_at(screen_pos: Vector2) -> Vector2:
+	return get_canvas_transform().affine_inverse() * screen_pos

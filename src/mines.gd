@@ -10,11 +10,8 @@ signal lost
 @export var rows := 16
 @export var mine_count := 60
 
-# 规格约束：跟着数据走，UI 与逻辑都从这里取
-const MIN_COLS := 9
-const MAX_COLS := 40
-const MIN_ROWS := 9
-const MAX_ROWS := 24
+# 规格约束(范围、跨字段约束)全部搬到 BoardSpec 了 —— 那里是"规格"的家，
+# 设置面板的 SpinBox 范围与 Board.apply_spec 的校验都从它取
 
 # 你定好的 坐标→状态 映射(用同一张表)
 const TILE := {
@@ -38,14 +35,12 @@ const TILE := {
 
 var cells := {}            # Vector2i -> {mine:bool, visit:bool, mark:int(0无/1旗/2问号)}
 var game_over := false
-var reveal_target := 0
 var revealed_count := 0
 
-# 把一组规格夹到合法范围（含跨字段约束：雷数不能占满整盘）
-static func clamp_spec(c: int, r: int, m: int) -> Vector3i:
-	c = clampi(c, MIN_COLS, MAX_COLS)
-	r = clampi(r, MIN_ROWS, MAX_ROWS)
-	return Vector3i(c, r, clampi(m, 1, c * r - 1))
+# 通关目标 = 总格数 - 雷数。
+# 刻意不存成字段：它是可推导的，存下来就多一条"改尺寸时要记得重算"的不变式
+func reveal_target() -> int:
+	return cols * rows - mine_count
 
 
 func _ready() -> void:
@@ -56,7 +51,6 @@ func start_game() -> void:
 	cells.clear()
 	revealed_count = 0
 	game_over = false
-	reveal_target = cols * rows - mine_count
 	for x in cols:
 		for y in rows:
 			cells[Vector2i(x,y)] = {"mine": false, "visit": false, "mark": 0}
@@ -97,7 +91,7 @@ func reveal(cell: Vector2i) -> void:
 	_step_box(cell)
 	if first:
 		started.emit()
-	if revealed_count == reveal_target:
+	if revealed_count == reveal_target():
 		_game_over(true, cell)
 
 # 右键：旗→问号→取消（对应 MakeGuess，去掉偏好只留循环）
@@ -131,7 +125,7 @@ func toggle_flag(cell: Vector2i) -> void:
 			#_game_over(false, nb)  
 			#return
 		#_step_box(nb)
-	#if revealed_count == reveal_target:
+	#if revealed_count == reveal_target():
 		#_game_over(true)
 
 func in_bounds(c: Vector2i) -> bool:

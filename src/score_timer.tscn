@@ -1,6 +1,6 @@
 [gd_scene format=3 uid="uid://crl57boekoxaw"]
 
-[ext_resource type="Script" uid="uid://2u2mae258ngo" path="res://UnitTest/score_timer.gd" id="1_wp4ty"]
+[ext_resource type="Script" uid="uid://2u2mae258ngo" path="res://src/score_timer.gd" id="1_wp4ty"]
 [ext_resource type="Texture2D" uid="uid://bkhkjnfatb32f" path="res://Asset/led.bmp" id="2_delci"]
 
 [node name="ScoreTimer" type="Node2D" unique_id=1250919362]

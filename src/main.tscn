@@ -1,0 +1,48 @@
+[gd_scene format=3 uid="uid://deq4ijgs2kxpx"]
+
+[ext_resource type="Script" uid="uid://djcmeni3g5f2l" path="res://src/background.gd" id="1_7b1y1"]
+[ext_resource type="Script" uid="uid://cllw4hhwrgo4t" path="res://src/main.gd" id="1_ydgul"]
+[ext_resource type="Script" uid="uid://dc8iva4vtllhp" path="res://src/camera_2d.gd" id="2_gm1ts"]
+[ext_resource type="PackedScene" uid="uid://d1y66c6t0koti" path="res://src/board.tscn" id="3_41rri"]
+[ext_resource type="PackedScene" uid="uid://crl57boekoxaw" path="res://src/score_timer.tscn" id="4_4i22m"]
+[ext_resource type="PackedScene" uid="uid://ctii1w0xso3aj" path="res://src/mine_counter.tscn" id="5_5mjca"]
+[ext_resource type="PackedScene" uid="uid://hjljqr3jiy3b" path="res://src/state_face.tscn" id="6_lo4dc"]
+[ext_resource type="PackedScene" uid="uid://c2gw8tsk62yka" path="res://ui.tscn" id="8_sus66"]
+[ext_resource type="Script" uid="uid://i1hd07q25m37" path="res://src/touch_bindings.gd" id="9_bind"]
+[ext_resource type="Script" uid="uid://bottb3ks1jl00" path="res://src/pointer_cursor.gd" id="9_cur"]
+[ext_resource type="Script" uid="uid://odmlh7w442hm" path="res://addons/touch_gestures/touch_gestures.gd" id="9_gest"]
+
+[node name="Main" type="Node2D" unique_id=289937505]
+script = ExtResource("1_ydgul")
+
+[node name="Background" type="Node2D" parent="." unique_id=105807495]
+position = Vector2(640, 360)
+script = ExtResource("1_7b1y1")
+
+[node name="Board" parent="Background" unique_id=1465599577 instance=ExtResource("3_41rri")]
+
+[node name="ScoreTimer" parent="Background" unique_id=1250919362 instance=ExtResource("4_4i22m")]
+
+[node name="MineCounter" parent="Background" unique_id=460550401 instance=ExtResource("5_5mjca")]
+
+[node name="StateFace" parent="Background" unique_id=2064482928 instance=ExtResource("6_lo4dc")]
+
+[node name="Camera2D" type="Camera2D" parent="." unique_id=1105508075]
+position = Vector2(640, 360)
+script = ExtResource("2_gm1ts")
+
+[node name="TouchGestures" type="Node" parent="." unique_id=1667083780]
+script = ExtResource("9_gest")
+
+[node name="TouchBindings" type="Node" parent="." unique_id=1031064708]
+script = ExtResource("9_bind")
+
+[node name="UILayer" parent="." unique_id=1560602418 instance=ExtResource("8_sus66")]
+
+[node name="PointerLayer" type="CanvasLayer" parent="." unique_id=1188061228]
+layer = 2
+
+[node name="PointerCursor" type="Node2D" parent="PointerLayer" unique_id=1188061229]
+script = ExtResource("9_cur")
+
+[node name="AudioStreamPlayer" type="AudioStreamPlayer" parent="." unique_id=1123533517]

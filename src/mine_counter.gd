@@ -25,7 +25,9 @@ func set_number(n: int) -> void:
 	var neg := n < 0
 	n = absi(n)
 	n = mini(n, 999)
+	@warning_ignore("integer_division")
 	var h := n / 100
+	@warning_ignore("integer_division")
 	var t := (n / 10) % 10
 	var o := n % 10
 	d[0].region_rect = _rect(LED["negative"] if neg else LED[str(h)])   # 负数时最高位显示负号

@@ -1,6 +1,6 @@
 [gd_scene format=3 uid="uid://ctii1w0xso3aj"]
 
-[ext_resource type="Script" uid="uid://db4incio203u5" path="res://mine_counter.gd" id="1_l1qjv"]
+[ext_resource type="Script" uid="uid://db4incio203u5" path="res://src/mine_counter.gd" id="1_l1qjv"]
 [ext_resource type="Texture2D" uid="uid://bkhkjnfatb32f" path="res://Asset/led.bmp" id="2_17vvd"]
 
 [node name="MineCounter" type="Node2D" unique_id=460550401]

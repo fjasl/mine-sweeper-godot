@@ -1,7 +1,10 @@
 extends Control
 class_name SettingsPanel
 
-signal apply_settings(cols: int, rows: int, mine_count: int, cursor_color: Color)
+signal apply_settings(spec: BoardSpec, cursor_color: Color)
+## 面板请求关闭(应用后用 / 关闭按钮 / 手柄 B)
+## 开关的意图归 main 的 _menu_open，面板只提请求、不自己改
+signal close_requested
 
 var _col_spin: SpinBox
 var _row_spin: SpinBox
@@ -16,10 +19,9 @@ var _sel := 0
 var _color_idx := 0
 var _color := Color(1, 0.9, 0.3)   # 当前光标颜色(预设或自定义共用)
 
-# "面板该不该开着"的唯一真相(意图)。刻意不用 visible：那是动画的结果，
-# 而且面板会自己关自己(_on_apply / 关闭按钮 / 手柄 B)，意图只能由自己维护
-var _want_open := false
-var _tween: Tween                  # 当前滑入/滑出动画，重开前必须先 kill
+# "该不该开着"的意图归 main(_menu_open)，面板不持有 —— 它只提 close_requested。
+# 这里留动画句柄：重开前必须先 kill，否则旧的 hide 回调会把面板藏起来
+var _tween: Tween
 
 var restart_func: Callable = Callable()
 
@@ -77,9 +79,9 @@ func _build_ui() -> void:
 	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
 	vb.add_child(title)
 
-	# 范围从 Mines 的常量取，避免规则出现第二份副本
-	_col_spin = _add_spin_row(vb, "列数", 30, Mines.MIN_COLS, Mines.MAX_COLS)
-	_row_spin = _add_spin_row(vb, "行数", 16, Mines.MIN_ROWS, Mines.MAX_ROWS)
+	# 范围从 BoardSpec 的常量取，避免规则出现第二份副本
+	_col_spin = _add_spin_row(vb, "列数", 30, BoardSpec.MIN_COLS, BoardSpec.MAX_COLS)
+	_row_spin = _add_spin_row(vb, "行数", 16, BoardSpec.MIN_ROWS, BoardSpec.MAX_ROWS)
 	_mine_spin = _add_spin_row(vb, "雷数", 60, 1, 999)
 	_col_spin.value_changed.connect(_sync_mine_max)
 	_row_spin.value_changed.connect(_sync_mine_max)
@@ -109,7 +111,7 @@ func _build_ui() -> void:
 	_restart_btn = Button.new(); _restart_btn.text = "重启"; btns.add_child(_restart_btn)
 	_restart_btn.pressed.connect(restart)
 	_close_btn = Button.new(); _close_btn.text = "关闭"; btns.add_child(_close_btn)
-	_close_btn.pressed.connect(close)
+	_close_btn.pressed.connect(func(): close_requested.emit())
 
 	# 手柄可聚焦项
 	_controls = [_col_spin, _row_spin, _mine_spin, _color_swatch, _color_btn, _apply_btn, _close_btn]
@@ -130,9 +132,8 @@ func _add_spin_row(parent, label: String, val: int, vmin: int, vmax: int) -> Spi
 func _sync_mine_max(_v: float) -> void:
 	_mine_spin.max_value = int(_col_spin.value) * int(_row_spin.value) - 1
 
-# 从左边滑入，占到左半屏
+# 从左边滑入，占到左半屏(纯表现：开关意图在 main)
 func open() -> void:
-	_want_open = true
 	_kill_tween()
 	show()
 	position.x = -get_viewport_rect().size.x * 0.5   # 先躲到左边外
@@ -142,23 +143,14 @@ func open() -> void:
 	_goto(0)   # 聚焦第一项
 
 func close() -> void:
-	_want_open = false
 	_kill_tween()
 	_tween = create_tween()
 	_tween.tween_property(self, "position:x", -get_viewport_rect().size.x * 0.5, 0.2)\
 		.set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_IN)
 	_tween.tween_callback(hide)
 
-# 开关的唯一入口：main 只喊这一声，判断依据由面板自己维护。
-# 不能用 visible 判断 —— 它是动画的结果；而且面板会自己关自己(_on_apply/关闭/B)
-func toggle() -> void:
-	if _want_open:
-		close()
-	else:
-		open()
-
 # 重开前必须停掉上一个动画：它在 close() 尾部挂的 hide 回调会在面板重新
-# 打开之后把它藏起来 —— 这是"点两次才打开"的另一半原因
+# 打开之后把它藏起来 —— 这是"点两次才打开"的另一半原因(kill 会一并取消回调)
 func _kill_tween() -> void:
 	if _tween and _tween.is_valid():
 		_tween.kill()
@@ -167,10 +159,11 @@ func restart() -> void:
 	restart_func.call()
 
 func _on_apply() -> void:
-	apply_settings.emit(
-		int(_col_spin.value), int(_row_spin.value),
-		int(_mine_spin.value), _color)
-	close()
+	# 把面板上的三个数值攒成一个规格值对象再发出去，接收端只需 2 个参数
+	var spec := BoardSpec.make(
+		int(_col_spin.value), int(_row_spin.value), int(_mine_spin.value))
+	apply_settings.emit(spec, _color)
+	close_requested.emit()
 
 func _set_color(c: Color) -> void:
 	_color = c
@@ -190,7 +183,7 @@ func _unhandled_input(event: InputEvent) -> void:
 	elif event.is_action_pressed("action_a"):
 		_activate()
 	elif event.is_action_pressed("action_b"):
-		close()
+		close_requested.emit()
 
 func _goto(i: int) -> void:
 	_sel = wrapi(i, 0, _controls.size())
@@ -209,6 +202,6 @@ func _activate() -> void:
 	if c == _apply_btn:
 		_on_apply()
 	elif c == _close_btn:
-		close()
+		close_requested.emit()
 	elif c == _color_btn:
 		c.get_popup().popup()   # 手柄按 A 弹完整调色板

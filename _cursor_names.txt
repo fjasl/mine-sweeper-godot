@@ -1,0 +1,18 @@
+# Lightech 光标包：中文原名 -> 英文新名
+# 这个文件是 UTF-8，脚本用显式 UTF-8 读取它，避免 PS 5.1 把脚本里的中文当 ANSI 搞坏。
+# 格式：原名=新名
+指针.cur=pointer.cur
+链接.cur=link.cur
+上下.cur=size_vertical.cur
+左右.cur=size_horizontal.cur
+移动.cur=move.cur
+不可用.cur=unavailable.cur
+左上右下.cur=size_fdiagonal.cur
+右上左下.cur=size_bdiagonal.cur
+文本.cur=text.cur
+候选.cur=candidate.cur
+十字.cur=cross.cur
+帮助.cur=help.cur
+手写.cur=handwriting.cur
+忙.ani=busy.ani
+后台.ani=background.ani

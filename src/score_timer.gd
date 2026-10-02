@@ -33,6 +33,7 @@ func _process(delta: float) -> void:
 
 func set_number(n: int) -> void:
 	n = clampi(n, 0, 999)
+	@warning_ignore("integer_division")
 	var digits := [n / 100, (n / 10) % 10, n % 10]
 	for i in 3:
 		# 数字 d 在 led 图里是第 (11 - d) 行(第0列)
