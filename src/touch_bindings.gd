@@ -326,8 +326,12 @@ func _on_pinch_changed(factor: float, center: Vector2) -> void:
 	if absf(step - 1.0) < dead:
 		return
 	_last_pinch = factor
-	cam.zoom_by(step, center)
-	_log("pinch factor=%.3f step=%.4f" % [factor, step])
+	# 锚点必须换算成**窗口坐标**：zoom_by() 内部走 get_canvas_transform()，
+	# 那个变换吃的是窗口坐标(滚轮那条传 get_mouse_position() 正是如此)。
+	# 而 tracker.centroid() 给的是视口逻辑坐标，直接传会让缩放中心偏 1.5 倍，
+	# 表现为"缩放时画面整体位移、指针与内容错位"。
+	cam.zoom_by(step, to_window(center))
+	_log("pinch factor=%.3f step=%.4f center_vp=%s center_win=%s" % [factor, step, center, to_window(center)])
 
 func _on_pinch_ended(total_factor: float) -> void:
 	_last_pinch = 1.0

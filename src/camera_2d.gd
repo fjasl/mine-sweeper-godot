@@ -14,10 +14,12 @@ var _bounds := Rect2()     # 相机中心允许活动的世界矩形(棋盘面�
 var _input_enabled := true # 用户输入是否生效(设置面板打开时由 main 关掉)
 
 func _process(delta: float) -> void:
-	# 平移：ui_* 内置 action(拖动期间不叠加键盘平移，免得两个来源抢方向)
-	# 语义与中键拖动一致：按哪个方向，画面内容就往哪个方向走
+	# 平移：ui_* 内置 action(拖动期间不叠加键盘平移，免得两个来源抢方向)。
+	# 语义：按哪个方向的键，**相机就往那个方向走**(视野朝该方向推进)。
+	# 注意这与"按住中键拖动"的手感不同 —— 那里是抓住内容拖，相机要反向移动；
+	# 键盘平移属于"移动镜头"，同向才符合直觉。
 	if _input_enabled and not _panning:
-		position -= Input.get_vector("ui_left","ui_right","ui_up","ui_down") * move_speed * delta
+		position += Input.get_vector("ui_left","ui_right","ui_up","ui_down") * move_speed * delta
 
 	# 缩放：自定义 action，滚轮每滚一格是"刚按下"，用 is_action_just_pressed
 	if _input_enabled:
@@ -85,14 +87,18 @@ func _clamp_to_bounds() -> void:
 func _zoom_at_mouse(f: float) -> void:
 	zoom_by(f, get_viewport().get_mouse_position())
 
-# 按比例缩放，并以 screen_anchor(视口坐标) 为锚点。
-# 触摸的捏合走这里 —— 滚轮那条路锚在"鼠标位置"，触摸设备上那个位置没有意义。
-func zoom_by(factor: float, screen_anchor: Vector2) -> void:
-	var before := _world_at(screen_anchor)
+# 按比例缩放，以 window_anchor(**窗口坐标**) 为锚点。
+#
+# **锚点必须是窗口坐标**：内部走 get_canvas_transform()，那个变换吃的是窗口坐标
+# (滚轮那条用 get_mouse_position()，正是同一空间)。
+# 触摸侧拿到的是视口逻辑坐标，喂进来之前要先换算(TouchBindings.to_window())，
+# 否则缩放中心会偏一个拉伸比，表现为"缩放时画面整体位移、指针与内容错位"。
+func zoom_by(factor: float, window_anchor: Vector2) -> void:
+	var before := _world_at(window_anchor)
 	zoom = (zoom * factor).clamp(Vector2(min_zoom, min_zoom), Vector2(max_zoom, max_zoom))
-	position += before - _world_at(screen_anchor)
+	position += before - _world_at(window_anchor)
 	_clamp_to_bounds()
 
-# 视口坐标 → 世界坐标(与 Node2D.get_global_mouse_position() 同一套算法)
+# 窗口坐标 → 世界坐标(与 Node2D.get_global_mouse_position() 同一套算法)
 func _world_at(screen_pos: Vector2) -> Vector2:
 	return get_canvas_transform().affine_inverse() * screen_pos
