@@ -21,8 +21,6 @@ class_name TouchConfig
 @export_group("拖动 / 捏合")
 ## 位移超过这个比例才开始算拖动（相对屏幕短边）
 @export var drag_slop_ratio := 0.015
-## 两指距离变化小于这个比例就不算捏合（防抖，相对屏幕短边）
-@export var pinch_min_ratio := 0.005
 ## 捏合死区：spread 相对**上次输出值**变化小于这个比例就当作噪声，不输出。
 ## 这是"双指平移时画面轻微缩放抖动"的主开关。
 ##
