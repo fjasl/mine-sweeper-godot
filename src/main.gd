@@ -17,6 +17,7 @@ extends Node2D
 @onready var sky: NightSky = $Backdrop/Sky
 
 var _sm: GameStateMachine      # 对局阶段机：ready → playing → won/lost
+var _store: UserStore          # 本机持久化：英雄榜 + 光标颜色
 var _menu_open := false        # 菜单是否开着：唯一真相，供输入门控使用
 
 # Called when the node enters the scene tree for the first time.
@@ -75,6 +76,13 @@ func _ready() -> void:
 	face.restart_requested.connect(_restart)
 	
 	
+	# 本机持久化(英雄榜 + 光标颜色)：user:// 下一个小文件，启动读一次
+	_store = UserStore.new()
+	add_child(_store)
+	# 开机回显：光标颜色与英雄榜都照存档来(没存过就是默认值)
+	board.set_cursor_color(_store.get_cursor_color())
+	settings_panel.set_cursor_color(_store.get_cursor_color())
+	settings_panel.set_best_times(_store.snapshot())
 	settings_panel.set_restart_func(_restart)
 	
 	settings_btn.pressed.connect(_toggle_menu)
@@ -105,6 +113,12 @@ func _restart() -> void:
 ## 部件之间的接线留在装配处，和 bind() 的用意一致。
 func _on_game_state_changed(_from: BaseState, to: BaseState) -> void:
 	_apply_canvas_interaction()
+	# 通关 → 记成绩。表在 won 状态里已经停住，elapsed 就是本局用时。
+	# 只有正好等于某一档预设的棋盘才进榜(判据在 UserStore 里)，自定义尺寸不记。
+	if _sm.get_current_state_name() == &"won":
+		var sp := board.spec()
+		if not _store.record(sp.cols, sp.rows, sp.mine_count, timer.elapsed).is_empty():
+			settings_panel.set_best_times(_store.snapshot())
 	# 背景换调跟着阶段走(进行中 / 通关 / 失败)。放在这里而不是各状态的 _enter 里：
 	# 和上面那条一样，部件之间的接线留在装配处，状态不需要知道背景的存在
 	sky.set_phase(_sm.get_current_state_name())
@@ -164,8 +178,9 @@ func _sync_pause_state() -> void:
 
 # 设置面板"应用"：颜色是表现层的事，规格变更交给 Board
 func _apply_settings(spec: BoardSpec, cursor_color: Color) -> void:
-	# 光标颜色：纯表现，总是生效，不需要重开
+	# 光标颜色：纯表现，总是生效，不需要重开；顺带存进本机偏好，下次开机回显
 	board.set_cursor_color(cursor_color)
+	_store.set_cursor_color(cursor_color)
 
 	# 规格校验/写入都在 Board 里(规则的唯一出处)；规格没变就直接结束
 	if not board.apply_spec(spec):

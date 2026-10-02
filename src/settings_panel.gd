@@ -38,8 +38,13 @@ const ICON_CLOSE := preload("res://Asset/icon_close.svg")
 ## 这张是从模板场景里原样抽出来的(见该文件头部注释)，所以按钮才有那层"内层 border"
 ## —— 那其实是 focus 样式盒的 3px 近白描边，即"当前被选中的按钮"。
 const BTN_THEME := preload("res://ui/themes/button_theme.tres")
+## 模板行标题用的字体(英雄榜的文字也用它，保证字形与面板其它文字一致)
+const BASE_FONT := preload("res://ui/fonts/base_font.tres")
 
-## 预设光标颜色(与界面重做前是同一份，保证"只换皮肤、不改表现")
+## 预设光标颜色(与界面重做前同一份色值，本轮只**重排顺序** + 补足到 24)。
+## 顺序 = 色相：黄→橙→橙红→红→玫红→品红→紫→蓝紫→蓝→天蓝→青→蓝绿(第一行 12 格)，
+## 第二行是余下的绿→黄绿→棕系→白→雪白→浅灰→中灰→石板灰→深灰→近黑→黑。
+## **第 0 格仍是黄**，也就是原版默认的光标颜色，所以默认值没有变。
 const PALETTE := [
 	Color(1, 0.9, 0.3),     # 黄
 	Color(1, 0.75, 0.2),    # 橙
@@ -55,10 +60,16 @@ const PALETTE := [
 	Color(0.2, 0.9, 0.6),   # 蓝绿
 	Color(0.3, 1, 0.4),     # 绿
 	Color(0.65, 1, 0.3),    # 黄绿
+	Color(0.7, 0.55, 0.4),  # 米棕
+	Color(0.55, 0.35, 0.2), # 棕
 	Color(1, 1, 1),         # 白
+	Color(0.9, 0.9, 0.95),  # 雪白
 	Color(0.8, 0.8, 0.8),   # 浅灰
 	Color(0.5, 0.5, 0.5),   # 中灰
+	Color(0.45, 0.5, 0.55), # 石板灰
 	Color(0.25, 0.25, 0.25),# 深灰
+	Color(0.12, 0.12, 0.16),# 近黑
+	Color(0, 0, 0),         # 黑
 ]
 
 ## 三档难度预设，数值照原版扫雷(初级 9x9 雷10 / 中级 16x16 雷40 / 高级 30x16 雷99)。
@@ -91,6 +102,8 @@ var _preset_opt: OptionButton
 ## 难度列表(面板内 Control)：绝对定位在难度值控件正下方，见 _make_preset_row
 var _preset_list: PanelContainer
 var _preset_open := false
+## 列表展开时被高亮的那一项(手柄上下移动它，A 选中它)。展开时从当前档位起步。
+var _preset_hl := 0
 ## 弹窗开着时临时补进 ui_* 的手柄键位(见 POPUP_PAD 的说明)，用来精确摘除
 var _pad_added: Array[StringName] = []
 ## 写预设期间为 true：挡住 value_changed 回头的"反查预设"，
@@ -110,6 +123,8 @@ var _palette_btns: Array[Button] = []
 var _controls: Array = []
 var _sel := 0
 var _color: Color = PALETTE[0]
+## 英雄榜：档位名 → 那一行的秒数 Label(数据由 main 通过 set_best_times 注入)
+var _best_labels: Dictionary = {}
 
 var _restart_func: Callable = Callable()
 ## 动画句柄：重开前必须先 kill，否则旧的 hide 回调会把面板藏起来
@@ -206,6 +221,8 @@ func _build_ui() -> void:
 
 	vb.add_child(_make_segment("光标颜色"))
 	vb.add_child(_make_palette())
+	vb.add_child(_make_segment("扫雷英雄榜"))
+	vb.add_child(_make_best_rows())
 
 	# 三个动作按钮**不再塞在设置卡片里**，而是独立成下面一条面板。
 	# 样式与卡片同源(同一个主题样式盒)，只把内边距收窄一点：
@@ -285,14 +302,19 @@ func _slider_of(row: HBoxContainer) -> HSlider:
 	return row.get_node("HSlider")
 
 
-## 预设色板：一排小色块按钮，单选(ButtonGroup)，选中的那个多一圈白描边。
+## 预设色板：**固定 12 列**的网格(单选 ButtonGroup，选中的多一圈白描边)。
 ## 色块的底就是颜色本身，所以样式盒是逐按钮覆盖的 —— 这是唯一没法靠主题解决的部分。
+##
+## 为什么不用 HFlowContainer：它是**按可用宽度**折行的，宽度不受约束时不会换成第二行，
+## 而是把整个面板撑宽(加了 6 个颜色之后就是这样)。改成 GridContainer(columns=12) 之后
+## 布局与面板宽度**互相独立**：永远是 12 + 12，面板宽度回到原来的 474px。
 func _make_palette() -> Control:
 	var group := ButtonGroup.new()
-	var flow := HFlowContainer.new()
-	flow.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	flow.add_theme_constant_override("h_separation", 6)
-	flow.add_theme_constant_override("v_separation", 6)
+	var grid := GridContainer.new()
+	grid.columns = 12
+	grid.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	grid.add_theme_constant_override("h_separation", 6)
+	grid.add_theme_constant_override("v_separation", 6)
 	for i in PALETTE.size():
 		var c: Color = PALETTE[i]
 		var normal := StyleBoxFlat.new()
@@ -319,11 +341,51 @@ func _make_palette() -> Control:
 		b.toggled.connect(func(on: bool) -> void:
 			if on:
 				_color = c)
-		flow.add_child(b)
+		grid.add_child(b)
 		_palette_btns.append(b)
 		if i == 0:
 			b.button_pressed = true       # 默认选中第一格，_color 初值就是它
-	return flow
+	return grid
+
+## 英雄榜三行：档位名 + 最短秒数(没记录显示 "--")。
+## 数值由 main 通过 set_best_times() 注入 —— 面板不认识存档，只负责显示。
+func _make_best_rows() -> VBoxContainer:
+	var box := VBoxContainer.new()
+	for p in PRESETS:
+		var nm := str(p["name"])
+		var row := HBoxContainer.new()
+		row.add_child(_best_label(nm, 90.0))
+		var time_label := _best_label("--", 60.0)
+		row.add_child(time_label)
+		box.add_child(row)
+		_best_labels[nm] = time_label
+	return box
+
+## 英雄榜里的文字：**用模板那一套字体**(和行标题同源，res://ui/fonts/base_font.tres)，
+## 不用引擎默认字体 —— 否则"时间"那一列的字形会和面板其它文字明显不是一套。
+func _best_label(text: String, min_w: float) -> Label:
+	var l := Label.new()
+	var ls := LabelSettings.new()
+	ls.font = BASE_FONT
+	ls.font_size = 16
+	l.label_settings = ls
+	l.text = text
+	l.custom_minimum_size = Vector2(min_w, 0)
+	return l
+
+## 注入本机记录(档位名 → 秒数，-1 表示无记录)。开机与每次破纪录后各调一次。
+## 显示成**秒数**，与棋盘上 LED 的读法完全一致，避免出现两套时间语义。
+func set_best_times(best: Dictionary) -> void:
+	for nm in _best_labels:
+		var sec := float(best.get(nm, -1.0))
+		(_best_labels[nm] as Label).text = "--" if sec < 0.0 else str(int(sec))
+
+## 注入已保存的光标颜色：既作为当前选中色，也让色板停在正确的那一格。
+func set_cursor_color(c: Color) -> void:
+	_color = c
+	for i in _palette_btns.size():
+		var on: bool = i < PALETTE.size() and PALETTE[i].is_equal_approx(c)
+		_palette_btns[i].set_pressed_no_signal(on)
 
 ## 图标按钮 —— 照模板 ButtonHome / ButtonSetting 的写法：
 ## 只放图标不放文字(icon_max_width 限高 + 图标居中 + 手型光标)，说明放 tooltip。
@@ -430,14 +492,18 @@ func _expand_presets() -> void:
 	_preset_list.global_position = _preset_opt.global_position \
 		+ Vector2(0.0, _preset_opt.size.y + 4.0)
 	_preset_open = true
-	_bind_pad_for_list(true)
+	# 手柄：列表项不在 _controls 里(面板原有的手柄导航看不见它们)，所以展开时
+	# 主动把焦点放到当前档位那一项上，之后上/下与 A 由 _input 直接接管。
+	_preset_hl = clampi(_preset_opt.selected, 0, maxi(0, _preset_item_count() - 1))
+	_focus_preset_item()
 
 func _collapse_presets() -> void:
 	if _preset_list == null or not _preset_open:
 		return
 	_preset_list.visible = false
 	_preset_open = false
-	_bind_pad_for_list(false)
+	if _preset_opt != null:
+		_preset_opt.grab_focus()            # 焦点还给难度值控件，手柄不会"丢在某处"
 
 ## 选中某档：**直接调 _on_preset_selected**，不依赖 OptionButton 的信号 ——
 ## 实测 select(idx) 只改了 selected，并不发 item_selected(于是数值没写下去、
@@ -449,8 +515,64 @@ func _on_preset_picked(idx: int) -> void:
 ## 展开中，点在列表与值按钮之外 → 收起。
 ## 面板内的列表**没有** Window 那种焦点陷阱，这条必须自己加，否则它会一直挂着。
 ## 用 _input 而不是 _unhandled_input：后者看不到被 GUI 消费掉的点击(比如点在别的按钮上)。
+func _preset_items() -> VBoxContainer:
+	return _preset_list.get_child(0) as VBoxContainer
+
+func _preset_item_count() -> int:
+	var vb := _preset_items()
+	return 0 if vb == null else vb.get_child_count()
+
+func _focus_preset_item() -> void:
+	var vb := _preset_items()
+	if vb == null or vb.get_child_count() == 0:
+		return
+	_preset_hl = clampi(_preset_hl, 0, vb.get_child_count() - 1)
+	(vb.get_child(_preset_hl) as Button).grab_focus()
+
+## 当前"真正被高亮"的是哪一项 —— **以引擎的焦点为准**，不是我记的 _preset_hl。
+##
+## 为什么必须这样：列表项的高亮有**两条**来源，而它们只在一处汇合(引擎的焦点)——
+##   · 左摇杆：绑在 ui_up/ui_down 上，走引擎自带的焦点导航，把焦点挪到别的项上，
+##     **完全不经过本脚本**，所以 _preset_hl 不会跟着变；
+##   · 十字键：走本脚本下面的 move_up/move_down 分支，那里最后也是 grab_focus()。
+## 之前 A 只读 _preset_hl，于是"摇杆能看到高亮在动、按 A 却选不中" —— 它去选了记下的旧位置。
+func _focused_preset_index() -> int:
+	var vb := _preset_items()
+	if vb == null:
+		return _preset_hl
+	var f := get_viewport().gui_get_focus_owner()
+	for i in vb.get_child_count():
+		if vb.get_child(i) == f:
+			return i
+	return _preset_hl                  # 焦点不在列表里(例如又跑回值控件) → 退回记录值
+
+## 列表开着时的输入，**全部在这里接管**：
+##   - 手柄 A  → 选中高亮项(以前 A 只会把列表再开关一次，因为列表项不在 _controls 里)
+##   - 手柄 B  → 收起
+##   - 上/下   → 在列表内移动高亮
+##   - 鼠标左键点在列表与值控件之外 → 收起
 func _input(event: InputEvent) -> void:
-	if not _preset_open or not (event is InputEventMouseButton):
+	if not _preset_open:
+		return
+	if event.is_action_pressed(&"action_a"):
+		# 以**引擎焦点**为准，这样摇杆移动过的高亮也能被 A 选中(见 _focused_preset_index)
+		_on_preset_picked(_focused_preset_index())
+		get_viewport().set_input_as_handled()
+		return
+	if event.is_action_pressed(&"action_b"):
+		_collapse_presets()
+		get_viewport().set_input_as_handled()
+		return
+	if event.is_action_pressed(&"move_up") or event.is_action_pressed(&"move_down"):
+		var n := _preset_item_count()
+		if n > 0:
+			# 十字键：从**当前焦点**出发移动一格，再交回引擎焦点(与摇杆同一条最终状态)
+			_preset_hl = wrapi(_focused_preset_index()
+				+ (1 if event.is_action_pressed(&"move_down") else -1), 0, n)
+			_focus_preset_item()
+		get_viewport().set_input_as_handled()
+		return
+	if not (event is InputEventMouseButton):
 		return
 	var mb := event as InputEventMouseButton
 	if not mb.pressed or mb.button_index != MOUSE_BUTTON_LEFT:
