@@ -88,6 +88,9 @@ const POPUP_PAD := {
 }
 
 var _preset_opt: OptionButton
+## 难度列表(面板内 Control)：绝对定位在难度值控件正下方，见 _make_preset_row
+var _preset_list: PanelContainer
+var _preset_open := false
 ## 弹窗开着时临时补进 ui_* 的手柄键位(见 POPUP_PAD 的说明)，用来精确摘除
 var _pad_added: Array[StringName] = []
 ## 写预设期间为 true：挡住 value_changed 回头的"反查预设"，
@@ -117,15 +120,13 @@ func set_restart_func(callback: Callable) -> void:
 	_restart_func = callback
 
 
-## 安全网：临时补的那组手柄键位**只该在弹窗活着时存在**。
-## 万一 popup_hide 没发出来(弹窗被别的方式收掉)，下一帧就自己摘干净 ——
-## 漏在全局的后果是"菜单关着时十字键去推相机"，那恰恰是本项目刻意避免的
-## (十字键绑在 move_* 上、没进 ui_*，就是为了这个)。
-func _process(_delta: float) -> void:
-	if not _pad_added.is_empty() and not _preset_opt.get_popup().visible:
-		_bind_pad_for_popup(false)
-
-
+## 安全网：弹窗存活期的接管(临时手柄键位 + 触摸转鼠标)**只该在弹窗活着时存在**。
+## 万一 popup_hide 没发出来(弹窗被别的方式收掉)，下一帧就自己还原干净 ——
+## 漏在全局的后果有两个，都不能接受：
+##   - 临时键位漏掉 → 菜单关着时十字键会去推相机(本项目刻意避免的事)；
+##   - 触摸转鼠标漏掉 → 会和虚拟光标那套自绘合成事件同时生效，一次点击变两次。
+## 安全网已不需要：难度列表是面板内的 Control，展开期间由 _bind_pad_for_list()
+## 补手柄键位、收起时立刻摘掉，没有"被别的方式偷偷收掉"的窗口生命周期问题。
 func _ready() -> void:
 	# 左半屏抽屉(与重做前一致)：宽 = 半屏，高 = 全屏，贴左
 	anchor_left   = 0.0
@@ -340,8 +341,15 @@ func _make_button(icon: Texture2D, tip: String) -> Button:
 
 # ---- 取值 / 提请求 ----
 
-## 难度预设行(模板的下拉框控件 line_setting_option_button)。模板场景里预置的是
-## 「语言」一项；这里把标题改成「难度」，按原版三档重建列表，末尾补一个「自定义」。
+## 难度预设行。**显示仍用模板那个 OptionButton 本体**（主题里的圆角底与下拉箭头、
+## 160 宽、展开、字号 14 全部原样继承，外观与原来完全一致），只是**不让它弹出自带菜单**
+## —— 那个菜单是独立 Window，会吞触摸(虚拟光标冻住)、永远盖在主视口之上、点外面也关不掉。
+## 展开/选择改由面板内的列表负责(_build_preset_list)。
+##
+## 怎么堵的：OptionButton 打开窗口的动作在 **C++ 的 pressed() 虚函数**里 ——
+## 实测覆盖脚本的 _pressed()(那是给 GDScript 的 gdvirtual，并非同一个函数)与断开
+## pressed 信号**都拦不住**，窗口照弹。所以改在**窗口真正显示之前**的同帧把它收起
+## (about_to_popup → call_deferred hide)：既不会画出来，也不会留下抢焦点的窗口。
 func _make_preset_row() -> HBoxContainer:
 	var row: HBoxContainer = ROW_OPTION.instantiate()
 	row.get_node("Label").text = "难度"
@@ -351,22 +359,116 @@ func _make_preset_row() -> HBoxContainer:
 		_preset_opt.add_item(p["name"])
 	_preset_opt.add_item("自定义")          # 索引 == PRESETS.size()，只是个状态
 	_preset_opt.item_selected.connect(_on_preset_selected)
-	# 弹窗开/关 → 临时补上/摘下那组手柄键位(鼠标点开的也照样补，手柄可以接着操作)
+	# 自带菜单：弹出前同帧收起(理由见函数头)。它只是"关掉"这个副作用，
+	# 外观、取值、键盘/手柄激活全部照旧；我接上的 _toggle_presets 是唯一的展开入口。
 	var pop := _preset_opt.get_popup()
-	pop.about_to_popup.connect(func() -> void: _bind_pad_for_popup(true))
-	pop.popup_hide.connect(func() -> void: _bind_pad_for_popup(false))
+	pop.about_to_popup.connect(func() -> void: pop.hide.call_deferred())
+	_preset_opt.pressed.connect(_toggle_presets)
+	_build_preset_list()
 	return row
 
-## 把 POPUP_PAD 里的手柄键位补进 ui_*(enable=true) 或摘掉(enable=false)。
-## 摘的时候只摘 _pad_added 里记着的那几个，项目原有绑定绝不碰。
-func _bind_pad_for_popup(enable: bool) -> void:
+## 列表本体：挂在 **SettingsPanel 根节点**下(不是容器里)，因为要绝对定位到值控件正下方，
+## 而容器会强制排布子节点。挂在根上还顺便保证它画在所有行之上 —— 注意**不要**给
+## z_index：那是画布内全局排序，会把 UILayer 里的虚拟光标一起压在下面。
+func _build_preset_list() -> void:
+	_preset_list = PanelContainer.new()
+	_preset_list.visible = false
+	_preset_list.mouse_filter = Control.MOUSE_FILTER_STOP   # 点在列表上不算"点外面"
+	# 外框也用弹出菜单那一套面板底色(主题里 PopupMenu/styles/panel)，不自己配
+	_preset_list.add_theme_stylebox_override("panel", UI_THEME.get_stylebox("panel", "PopupMenu"))
+	var vb := VBoxContainer.new()
+	vb.add_theme_constant_override("separation", 0)
+	_preset_list.add_child(vb)
+	for i in _preset_opt.item_count:
+		vb.add_child(_make_preset_item(i))
+	_sync_preset_marks()
+	add_child(_preset_list)
+
+## 单项：**照原来弹出菜单的样子做** —— 左边一个"复选框"图标 + 文字，悬停/按下用菜单的
+## 高亮底色，平时透明(菜单项不是按钮)。素材与配色全部取自主题里 PopupMenu 那一组，
+## 一处都不自创，所以观感和原来逐项一致。
+func _make_preset_item(i: int) -> Button:
+	var b := Button.new()
+	b.text = _preset_opt.get_item_text(i)
+	b.alignment = HORIZONTAL_ALIGNMENT_LEFT
+	b.flat = true                       # 平时无底
+	b.custom_minimum_size = Vector2(160, 28)
+	b.focus_mode = Control.FOCUS_ALL
+	b.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
+	var hover := UI_THEME.get_stylebox("hover", "PopupMenu")
+	b.add_theme_stylebox_override("hover", hover)
+	b.add_theme_stylebox_override("pressed", hover)
+	b.add_theme_stylebox_override("focus", hover)
+	b.add_theme_color_override("font_color", UI_THEME.get_color("font_color", "PopupMenu"))
+	b.add_theme_font_override("font", UI_THEME.get_font("font", "PopupMenu"))
+	b.add_theme_font_size_override("font_size", UI_THEME.get_font_size("font_size", "PopupMenu"))
+	b.pressed.connect(_on_preset_picked.bind(i))
+	return b
+
+## 当前档位用"选中/未选中"两个复选框图标标出 —— 和原弹出菜单的单选标记是同一对素材
+func _sync_preset_marks() -> void:
+	if _preset_list == null or _preset_opt == null:
+		return
+	var vb := _preset_list.get_child(0) as VBoxContainer
+	for i in vb.get_child_count():
+		var b := vb.get_child(i) as Button
+		var on := (i == _preset_opt.selected)
+		b.icon = UI_THEME.get_icon("radio_checked" if on else "radio_unchecked", "PopupMenu")
+
+func _toggle_presets() -> void:
+	if _preset_open:
+		_collapse_presets()
+	else:
+		_expand_presets()
+
+func _expand_presets() -> void:
+	if _preset_list == null or _preset_opt == null:
+		return
+	_preset_list.reset_size()               # 先按内容算出尺寸
+	_preset_list.size.x = maxf(_preset_list.size.x, _preset_opt.size.x)
+	_preset_list.visible = true
+	_preset_list.global_position = _preset_opt.global_position \
+		+ Vector2(0.0, _preset_opt.size.y + 4.0)
+	_preset_open = true
+	_bind_pad_for_list(true)
+
+func _collapse_presets() -> void:
+	if _preset_list == null or not _preset_open:
+		return
+	_preset_list.visible = false
+	_preset_open = false
+	_bind_pad_for_list(false)
+
+## 选中某档：**直接调 _on_preset_selected**，不依赖 OptionButton 的信号 ——
+## 实测 select(idx) 只改了 selected，并不发 item_selected(于是数值没写下去、
+## 按钮文字也不更新)。_on_preset_selected 内部自己会把 selected 定下来。
+func _on_preset_picked(idx: int) -> void:
+	_collapse_presets()
+	_on_preset_selected(idx)
+
+## 展开中，点在列表与值按钮之外 → 收起。
+## 面板内的列表**没有** Window 那种焦点陷阱，这条必须自己加，否则它会一直挂着。
+## 用 _input 而不是 _unhandled_input：后者看不到被 GUI 消费掉的点击(比如点在别的按钮上)。
+func _input(event: InputEvent) -> void:
+	if not _preset_open or not (event is InputEventMouseButton):
+		return
+	var mb := event as InputEventMouseButton
+	if not mb.pressed or mb.button_index != MOUSE_BUTTON_LEFT:
+		return
+	var at := mb.position
+	if _preset_list.get_global_rect().has_point(at) or _preset_opt.get_global_rect().has_point(at):
+		return
+	_collapse_presets()
+
+## 列表展开期间**只补手柄键位**(十字键/A/B → ui_up/ui_down/ui_accept/ui_cancel)，
+## 之后交给引擎自带的焦点导航；一收起立刻摘掉，项目原有绑定绝不碰。
+func _bind_pad_for_list(enable: bool) -> void:
 	if not enable:
 		for action in _pad_added:
 			var ev := _find_pad_event(action, POPUP_PAD[action])
 			if ev != null:
 				InputMap.action_erase_event(action, ev)
 		_pad_added.clear()
-		set_process(false)              # 没有键位要守了，安全网也跟着停
 		return
 	for action in POPUP_PAD:
 		if _find_pad_event(action, POPUP_PAD[action]) != null:
@@ -375,8 +477,6 @@ func _bind_pad_for_popup(enable: bool) -> void:
 		e.button_index = POPUP_PAD[action]
 		InputMap.action_add_event(action, e)
 		_pad_added.append(action)
-	# 只有真的补进了键位，才需要每帧盯着"弹窗有没有被别的方式收掉"
-	set_process(not _pad_added.is_empty())
 
 ## 按**按钮号**找已有绑定。不能用 InputMap.action_has_event()：
 ## 那个比的是 Ref 的对象身份，拿一个新建的等价事件去问永远返回 false。
@@ -400,6 +500,7 @@ func _on_preset_selected(idx: int) -> void:
 	_slider_of(_mine_row).value = p["mines"]
 	_preset_opt.selected = idx
 	_syncing = false
+	_sync_preset_marks()
 
 ## 列/行变了：先修雷数上限，再回显预设
 func _on_size_changed(_v: float = 0.0) -> void:
@@ -421,6 +522,7 @@ func _refresh_preset_selection(_v: float = 0.0) -> void:
 			idx = i
 			break
 	_preset_opt.selected = idx
+	_sync_preset_marks()
 
 ## 雷数上限 = 列 × 行 - 1(至少留一格给首击)。
 ## HSlider 在 max 变小时会自己把 value 夹回去，并触发 value_changed 刷新标签。
@@ -457,11 +559,7 @@ func open() -> void:
 
 func close() -> void:
 	_kill_tween()
-	# 下拉列表还开着就一并收掉，并把临时补的手柄键位摘干净
-	# (不能只靠 popup_hide 信号：hide() 不一定会发它)
-	if _preset_opt != null and _preset_opt.get_popup().visible:
-		_preset_opt.get_popup().hide()
-	_bind_pad_for_popup(false)
+	_collapse_presets()                 # 难度列表还开着就一并收掉(连带摘掉临时键位)
 	# 在隐藏前还回焦点：open() 时 _goto(0) 抓住了某个控件，
 	# 而隐藏的 Control 不会自动释放焦点 —— 留着的话**空格/回车**(ui_accept 里真的
 	# 绑了这两个键，而空格同时还绑着 new_game)会被那个隐形控件吃掉，棋盘收不到。
@@ -482,9 +580,9 @@ func _kill_tween() -> void:
 	if _tween and _tween.is_valid():
 		_tween.kill()
 
-## 万一抽屉还开着下拉列表就被销毁，别把临时补的手柄键位留在全局 InputMap 里
+## 万一抽屉还开着下拉列表就被销毁，别把临时键位和触摸转鼠标留在全局
 func _exit_tree() -> void:
-	_bind_pad_for_popup(false)
+	_bind_pad_for_list(false)
 
 
 # ---- 手柄导航 ----
@@ -583,7 +681,7 @@ func _adjust(dir: int) -> void:
 	if c is HSlider:
 		(c as HSlider).value += dir
 	elif c is OptionButton:
-		# 难度下拉：左右键直接换档
+		# 难度：左右键直接换档(外观是 OptionButton，展开由面板内列表负责)
 		var n: int = _preset_opt.item_count
 		if n > 0:
 			_on_preset_selected(wrapi(_preset_opt.selected + dir, 0, n))
@@ -602,12 +700,7 @@ func _activate() -> void:
 	elif c == _close_btn:
 		close_requested.emit()
 	elif c is OptionButton:
-		# 手柄 A 展开难度列表。**必须自己定位**：裸 popup() 会把窗口丢到左上角(0,0)，
-		# 鼠标点击那条路是 OptionButton 内部定位的。
-		# 展开之后手柄怎么操作列表，见 POPUP_PAD 的说明(临时补 ui_* 键位)。
-		var ob := c as OptionButton
-		var pop := ob.get_popup()
-		pop.position = Vector2i(ob.global_position) + Vector2i(0, int(ob.size.y))
-		pop.popup()
+		# 手柄 A 展开/收起难度列表(列表是面板内的 Control，位置自己定，不涉及窗口定位)
+		_toggle_presets()
 	elif c is Button and (c as Button).toggle_mode:
 		(c as Button).button_pressed = true

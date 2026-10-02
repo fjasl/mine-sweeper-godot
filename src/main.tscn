@@ -11,6 +11,7 @@
 [ext_resource type="PackedScene" uid="uid://c2gw8tsk62yka" path="res://ui.tscn" id="8_sus66"]
 [ext_resource type="Script" uid="uid://i1hd07q25m37" path="res://src/touch_bindings.gd" id="9_bind"]
 [ext_resource type="Script" uid="uid://odmlh7w442hm" path="res://addons/touch_gestures/touch_gestures.gd" id="9_gest"]
+[ext_resource type="Resource" path="res://src/touch_config.tres" id="10_tcfg"]
 
 [node name="Main" type="Node2D" unique_id=289937505]
 script = ExtResource("1_ydgul")
@@ -35,6 +36,7 @@ script = ExtResource("2_gm1ts")
 
 [node name="TouchGestures" type="Node" parent="." unique_id=1667083780]
 script = ExtResource("9_gest")
+config = ExtResource("10_tcfg")
 
 [node name="TouchBindings" type="Node" parent="." unique_id=1031064708]
 script = ExtResource("9_bind")

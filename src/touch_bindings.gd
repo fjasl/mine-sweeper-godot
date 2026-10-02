@@ -197,8 +197,12 @@ func _move_pointer(delta: Vector2) -> void:
 	_send_motion(to_window(pointer_pos), Vector2.ZERO, MOUSE_BUTTON_MASK_LEFT if _held else 0)
 
 func _update_pointer() -> void:
-	if pointer:
-		pointer.set_pointer(pointer_pos, &"drag" if _held else &"normal")
+	if pointer == null:
+		return
+	# 光标固定在 UILayer(主视口的 CanvasLayer)里，坐标就是主视口的基准坐标，直接喂。
+	# (曾经为了不被弹窗盖住而把它临时搬进弹窗窗口，那时这里要按"父节点是不是 Window"
+	#  再换算一次；难度列表改成面板内的 Control 之后没有这个搬动了，换算一并删掉。)
+	pointer.set_pointer(pointer_pos, &"drag" if _held else &"normal")
 
 # ---- 点击：轻点=左键，长按=右键（都发生在指针处） ----
 
@@ -256,16 +260,22 @@ func _click(at: Vector2, button: MouseButton) -> void:
 func pointer_viewport_pos() -> Vector2:
 	return pointer_pos
 
-## 视口逻辑坐标 → 窗口坐标。
-## 项目用 canvas_items 拉伸(基准 1280×720)，窗口实际尺寸不同时两者差一个比例
-## (1920 宽窗口 → 1.5)。**引擎的 GUI 命中测试用的是窗口坐标**，所以合成事件、
-## 以及一切"要落到某个控件上"的位置都必须先过这里，否则就会画在一个地方、
-## 点在另一个地方。
+## 视口逻辑坐标 → 窗口坐标(合成输入事件要的空间)。
+##
+## **用引擎自己的变换，不要手算。** `get_final_transform()` 的定义就是
+## "视口坐标 → 窗口坐标"，它自带拉伸比**和居中偏移**。
+##
+## 实测(同一个 6×6 目标，用两种算法分别去点，命中与否由目标自己回答)：
+##   窗口 1280×720 / 基准 1280×720 : 两者相同      → 都命中
+##   窗口 2160×1920               : 手算漏 353px 纵向偏移 → 点不中；引擎变换点中
+##   窗口 1280×1000               : 手算漏 140px        → 点不中；引擎变换点中
+##
+## 旧写法是 `viewport_pos * (DisplayServer.window_get_size() / visible_rect.size)`：
+## **只算了比例，完全没算偏移**(visible_rect 的 position 在这几种情况下不是 0)。
+## 症状就是"光标画在一个地方、点在另一个地方"，而且**只在非 16:9 的屏幕上出现** ——
+## 2160×1920 这类屏幕正好踩中，16:9 的窗口怎么测都是对的。
 func to_window(viewport_pos: Vector2) -> Vector2:
-	var vis := get_viewport().get_visible_rect().size
-	if vis.x <= 0.0 or vis.y <= 0.0:
-		return viewport_pos
-	return viewport_pos * (Vector2(DisplayServer.window_get_size()) / vis)
+	return get_viewport().get_final_transform() * viewport_pos
 
 ## 指针的窗口坐标(合成事件与棋盘命中用这个)
 func pointer_window_pos() -> Vector2:
@@ -339,16 +349,18 @@ func _on_pinch_changed(factor: float, center: Vector2) -> void:
 	if absf(step - 1.0) < dead:
 		return
 	_last_pinch = factor
-	# 锚点**不换算**。zoom_by() 内部走 get_canvas_transform()，吃的正是这个空间
-	# (与 get_mouse_position() 同空间)；tracker.centroid() 来自 ScreenTouch/Drag，
-	# 引擎已经把它从窗口坐标换算成基准坐标了。再乘一次拉伸比会让缩放中心偏掉，
-	# 而且漏掉黑边偏移 —— 症状是"捏合时画面整体位移、光标与内容错位"。
-	# **别和本文件里的合成鼠标事件搞混**：Input.parse_input_event() 要的是**窗口坐标**
-	# (引擎会自己除掉拉伸比)，所以 _click()/_send_motion() 那几处必须保留 to_window()。
-	# 两条管线的空间不同，实测确认过。
-	cam.zoom_by(step, center)
-	_log("pinch factor=%.3f step=%.4f center_vp=%s center_win=%s" % [
-		factor, step, center, to_window(center)])
+	# **缩放锚点 = 虚拟光标的位置，不是两指中心。**
+	# 触控板模型下光标是唯一的指针，一切都锚在它身上 —— 滚轮/右摇杆那条路
+	# (cam._zoom_at_anchor)也是这个语义，捏合没理由不一样。
+	# 两指中心(center)只用来算比例，不参与锚定；这里只把它记进日志。
+	#
+	# 锚点**不做任何换算**：zoom_by() 内部走 get_canvas_transform()，吃的正是
+	# 视口基准坐标(与 get_mouse_position() 同空间)，而 pointer_pos 也是这个空间。
+	# 别和本文件里的合成鼠标事件搞混 —— Input.parse_input_event() 要的是窗口坐标
+	# (见 to_window() 的说明)，两条管线的空间不同，都实测确认过。
+	cam.zoom_by(step, pointer_pos)
+	_log("pinch factor=%.3f step=%.4f anchor_vp=%s fingers_vp=%s" % [
+		factor, step, pointer_pos, center])
 
 func _on_pinch_ended(total_factor: float) -> void:
 	_last_pinch = 1.0
