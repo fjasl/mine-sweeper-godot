@@ -2,7 +2,7 @@ extends Node
 class_name UserStore
 
 ## 本机的少量持久化状态：**英雄榜**(三档最短通关秒数) + **用户偏好**(光标颜色)
-## + **棋盘规格**(上次用的难度，开机照它铺盘)。
+## + **棋盘规格**(上次用的难度，开机照它铺盘) + **触屏手感**(指针/轻点/拖动阈值)。
 ##
 ## 后端用 CoreSystem 的 **config_manager**：它就是"键值 + 同步 ConfigFile"的形状，
 ## 实测能把 Color 与 Dictionary 原样往返，且不需要任何模块开关，正是这两个需求要的。
@@ -27,6 +27,8 @@ const SECTION_BOARD := "board"
 const KEY_COLS := "cols"
 const KEY_ROWS := "rows"
 const KEY_MINES := "mines"
+## 手感参数按字段名逐个存(见 TouchFeel.KEYS)，config.cfg 里是可读可手改的
+const SECTION_TOUCH := "touch"
 
 ## 档位名 → 最短秒数。没有记录的档位不在字典里。
 var _best: Dictionary = {}
@@ -38,6 +40,9 @@ var _cursor_color: Color = SettingsPanel.PALETTE[0]
 ## 那三个 int 上(见 BoardSpec 的类注释)。本字段只在"开机读一次 / 改难度写一次"过手，
 ## 并且对外一律给新建的值对象(get_board_spec)，别让调用方拿到这里这份去改。
 var _board: BoardSpec = BoardSpec.new()
+## 触屏手感。初值 = TouchFeel 的基线(= 那几个参数的唯一出处)，本文件不再抄一份数字。
+## 与 _board 同样只作"存档"用：生效中的值在 TouchBindings / TouchGestures.config 上。
+var _touch: TouchFeel = TouchFeel.defaults()
 
 
 func _ready() -> void:
@@ -63,6 +68,12 @@ func load_all() -> void:
 		int(cm.get_value(SECTION_BOARD, KEY_ROWS, _board.rows)),
 		int(cm.get_value(SECTION_BOARD, KEY_MINES, _board.mine_count)))
 	_board = b.clamped()
+	# 触屏手感：按 TouchFeel.KEYS 逐项读，缺项用基线兜底，读完同样过一遍 clamped()。
+	# 用 get/set 按字段名取值，所以以后加参数只要往 KEYS 里加一项，这里不用动
+	var base := TouchFeel.defaults()
+	for k in TouchFeel.KEYS:
+		_touch.set(k, cm.get_value(SECTION_TOUCH, String(k), base.get(k)))
+	_touch = _touch.clamped()
 
 
 func _save() -> void:
@@ -73,6 +84,8 @@ func _save() -> void:
 	cm.set_value(SECTION_BOARD, KEY_COLS, _board.cols)
 	cm.set_value(SECTION_BOARD, KEY_ROWS, _board.rows)
 	cm.set_value(SECTION_BOARD, KEY_MINES, _board.mine_count)
+	for k in TouchFeel.KEYS:
+		cm.set_value(SECTION_TOUCH, String(k), _touch.get(k))
 	cm.save_config()
 
 
@@ -144,4 +157,24 @@ func set_board_spec(s: BoardSpec) -> void:
 	if c.equals(_board):
 		return                          # 没变就不落盘，和 set_cursor_color 同一套节制
 	_board = c
+	_save()
+
+
+# ---- 触屏手感 ----
+
+## 上次调好的手感。返回**新建的值对象**，调用方改不到存档里那一份
+func get_touch_feel() -> TouchFeel:
+	return _touch.clamped()
+
+
+## 记一次手感。夹取与范围约束只走 TouchFeel.clamped()(唯一出处)，
+## 本方法只负责"过一手存档"。**拖动滑条的过程中不要每帧调这里** ——
+## 面板是拖动时实时生效、松手/收起抽屉时才落盘，见 SettingsPanel 的说明
+func set_touch_feel(f: TouchFeel) -> void:
+	if f == null:
+		return
+	var c := f.clamped()
+	if c.equals(_touch):
+		return                          # 没变就不落盘
+	_touch = c
 	_save()

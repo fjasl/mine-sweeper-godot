@@ -15,6 +15,11 @@ extends Node2D
 @onready var game_over_panel: GameOverPanel = $UILayer/GameOverPanel
 ## 夜空背景(自己画的流星)。**只被喂值**：进度来自 Board，色调来自阶段机
 @onready var sky: NightSky = $Backdrop/Sky
+## 触摸两层。手感参数分别住在它们身上(TouchBindings 的那几个 @export，
+## 以及 TouchGestures.config 这个 TouchConfig)，所以设置面板改了手感之后由这里写进去 ——
+## 面板不认识这两个节点，和它不认识 Board 是同一个道理。
+@onready var gestures: TouchGestures = $TouchGestures
+@onready var touch: TouchBindings = $TouchBindings
 
 var _sm: GameStateMachine      # 对局阶段机：ready → playing → won/lost
 var _store: UserStore          # 本机持久化：英雄榜 + 光标颜色 + 棋盘规格
@@ -27,6 +32,10 @@ func _ready() -> void:
 	# (add_child 会触发 UserStore._ready() → load_all()，下面拿到的就是读过存档的值)
 	_store = UserStore.new()
 	add_child(_store)
+
+	# 触屏手感同样照存档恢复(没存过就是 TouchFeel 的基线)，写进生效中的那两个对象。
+	# 与棋盘规格一样属于"开机的初始状态"，且不依赖任何布局
+	_apply_touch_feel(_store.get_touch_feel())
 
 	# 规格只写进规则层(校验与夹取都在 Board.apply_spec 里)。它**不开局**，
 	# 而 Board._ready() 已经按脚本默认值铺过一次盘了 —— 所以规格真的变了才需要重铺。
@@ -96,6 +105,11 @@ func _ready() -> void:
 	
 	settings_btn.pressed.connect(_toggle_menu)
 	settings_panel.apply_settings.connect(_apply_settings)
+	# 手感滑条一动就来这里 —— **实时生效**，所以拖着滑条就能试出手感
+	settings_panel.touch_feel_changed.connect(_apply_touch_feel)
+	# 开机先让面板与"生效中的那一份"对齐(理由同下面 _apply_canvas_interaction 那句：
+	# 默认恰好正确只是巧合，不是契约)
+	settings_panel.set_touch_feel(_current_touch_feel())
 	# 面板请求关闭(应用后 / 关闭按钮 / 手柄 B) → main 统一改 _menu_open
 	settings_panel.close_requested.connect(func(): _set_menu_open(false))
 
@@ -168,12 +182,16 @@ func _set_menu_open(open: bool) -> void:
 	# 开关只负责改状态，画布侧的一切后果都由 _apply_canvas_interaction() 统一施加
 	_apply_canvas_interaction()
 	if open:
-		# 拉开之前先把棋盘的**当前**规格喂给面板：面板从不主动问棋盘，不喂的话
+		# 拉开之前先把"当前这一份"喂给面板：面板从不主动问棋盘与触摸层，不喂的话
 		# 滑条会停在上一轮的值上，玩家一个控件都没动就点「应用」会把棋盘改回旧规格
 		settings_panel.set_spec(board.spec())
+		settings_panel.set_touch_feel(_current_touch_feel())
 		settings_panel.open()
 	else:
 		settings_panel.close()
+		# **收起抽屉才落盘**：拖滑条一次会发几十次改动，没必要每次都写文件。
+		# UserStore.set_touch_feel 内部还有"没变就不写"的守卫，所以白开一次不落盘
+		_store.set_touch_feel(settings_panel.touch_feel())
 
 ## 抽屉开着 = playing -> paused(表停)；收起 = paused -> playing(接着走)。
 ## 只在 playing 之间来回，另三种状态刻意都不迁移：
@@ -204,6 +222,51 @@ func _apply_settings(spec: BoardSpec, cursor_color: Color) -> void:
 
 	_restart()      # 新局 + HUD 复位 + 收起弹窗(修掉改尺寸后笑脸/弹窗不复位)
 	_relayout()     # 尺寸变了，表现层几何与相机要重算
+
+# ---- 触屏手感：写进 / 读回生效中的那两个对象 ----
+
+## 把手感写进**生效中的那两个对象**(真相所在)。纯赋值，**不落盘** ——
+## 落盘由 _set_menu_open 在收起抽屉时做一次。
+## 两个入口共用它：开机恢复存档，以及面板拖动时的实时生效(信号直接连到这里)。
+func _apply_touch_feel(f: TouchFeel) -> void:
+	if f == null:
+		return
+	var c := f.clamped()
+	# 指针这一路住在 TouchBindings 上
+	touch.pointer_gain = c.pointer_gain
+	touch.pointer_accel = c.pointer_accel
+	touch.double_tap_sec = c.double_tap_sec
+	# 注意这里**不碰** touch.tap_at_touch_point：它是 TouchBindings 上的场景级 @export，
+	# 不属于 TouchFeel(面板里那一栏已按需求去掉)，所以由 main.tscn 的 Inspector 说了算
+	# 手势阈值这一路住在 TouchGestures.config 上
+	var cfg := gestures.config
+	if cfg == null:
+		return
+	cfg.tap_slop_ratio = c.tap_slop_ratio
+	cfg.tap_max_sec = c.tap_max_sec
+	cfg.drag_slop_ratio = c.drag_slop_ratio
+	cfg.pinch_deadzone_ratio = c.pinch_deadzone_ratio
+	# 跨字段不变式：长按阈值必须**大于**轻点窗口(tap.gd 与 long_press.gd 的注释都写了)，
+	# 两者一旦相等，一次恰好卡在边界的按下会被轻点与长按同时认领。
+	# 游戏里长按的处理函数目前整段被注释掉、暂时无害，但这里顺手把不变式守住，
+	# 免得以后把长按接回来时踩到这个坑
+	cfg.long_press_sec = maxf(cfg.long_press_sec, c.tap_max_sec + 0.05)
+
+
+## 读回**生效中**的那一份(与 _apply_touch_feel 严格对称)。
+## 刻意不缓存成字段：缓存会和对象上的真值分家，而那两个对象才是真相所在
+func _current_touch_feel() -> TouchFeel:
+	var f := TouchFeel.new()
+	f.pointer_gain = touch.pointer_gain
+	f.pointer_accel = touch.pointer_accel
+	f.double_tap_sec = touch.double_tap_sec
+	var cfg := gestures.config
+	if cfg != null:
+		f.tap_slop_ratio = cfg.tap_slop_ratio
+		f.tap_max_sec = cfg.tap_max_sec
+		f.drag_slop_ratio = cfg.drag_slop_ratio
+		f.pinch_deadzone_ratio = cfg.pinch_deadzone_ratio
+	return f.clamped()
 
 # 尺寸变化后的表现层重排(几何与相机的唯一出处)
 func _relayout() -> void:

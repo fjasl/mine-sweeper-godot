@@ -1,20 +1,6 @@
-[gd_resource type="Resource" script_class="TouchConfig" load_steps=2 format=3]
+[gd_resource type="Resource" script_class="TouchConfig" format=3 uid="uid://doa18hljuie3f"]
 
-[ext_resource type="Script" path="res://addons/touch_gestures/touch_config.gd" id="1_cfg"]
-
-; 移动端手感参数。**只覆盖需要改的字段**，其余沿用 TouchConfig 的默认值。
-;
-; 为什么改这两条：
-;   tap_slop_ratio  0.02 → 0.045
-;     它乘屏幕短边(基准 720)得 14.4 基准像素 —— 手指轻点抖一下就超过，
-;     于是被 tap.gd 判成"拖动"、取消点击，点击变成推动指针。
-;     后果是大目标(棋盘格)照常可用，小目标(UI 按钮)点不中。
-;     真机上 14.4 基准像素 ≈ 2mm，0.045 ≈ 32 基准像素 ≈ 4mm，仍远小于拖动。
-;   tap_max_sec     0.35 → 0.45
-;     0.35 秒的"轻点"窗口对触屏偏紧。**刻意不设到 0.5**：长按阈值
-;     long_press_sec 也是 0.5，两者一旦相等，一次恰好 0.5 秒的按下会被
-;     长按(右键)和轻点(左键)同时认领 —— 于是点一下既插旗又翻格。
-;     留 50ms 间隔，宁可这 50ms 里什么都不发生。
+[ext_resource type="Script" uid="uid://c04aj1j0te3p0" path="res://addons/touch_gestures/touch_config.gd" id="1_cfg"]
 
 [resource]
 script = ExtResource("1_cfg")

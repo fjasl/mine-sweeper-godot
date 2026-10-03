@@ -23,11 +23,34 @@ signal apply_settings(spec: BoardSpec, cursor_color: Color)
 ## 面板请求关闭(应用后 / 关闭按钮 / 手柄 B)。开关的意图归 main 的 _menu_open，
 ## 面板只提请求、不自己改。
 signal close_requested
+## 手感被改动(拖动滑条)。**实时发出**：main 收到就立刻写进生效中的
+## TouchBindings / TouchGestures.config，于是拖着滑条就能试出手感。
+## **落盘不在这里** —— 拖动一次会发几十次，写文件由 main 在收起抽屉时做一次。
+signal touch_feel_changed(feel: TouchFeel)
 
 const UI_THEME := preload("res://ui/themes/base_theme.tres")
 const ROW_SLIDER := preload("res://ui/gameobjects/line_setting_slider/line_setting_slider.tscn")
 const ROW_SEGMENT := preload("res://ui/gameobjects/segmentation_line/segmentation_line.tscn")
 const ROW_OPTION := preload("res://ui/gameobjects/line_setting_option_button/line_setting_option_button.tscn")
+
+## 页签标题。顺序 = 页在 TabContainer 里的顺序 = 按钮条上按钮的顺序
+const TAB_TITLES := ["棋盘", "手感"]
+## 面板内下拉框的下标：两个下拉共用 _make_opt_row / _build_opt_list 那一套
+const OPT_DIFFICULTY := 0
+const OPT_FEEL := 1
+## 手感预设。**目前只有一档「默认」**(= TouchFeel 的基线)，列表里那一项「自定义」
+## 只是个状态，表示"当前滑条的值不对应任何一档"—— 与难度那边的「自定义」同一个意思。
+## 以后加档位：往这里加一项，`feel` 给一份 TouchFeel(想覆盖哪个字段就填哪个)。
+const FEEL_PRESETS := [
+	{"name": "默认", "feel": null},     # null = 用 TouchFeel.defaults()
+]
+## 第 2 页的分段 → 参数键。**分段标题属于界面**，所以留在面板这边，
+## 不塞进 TouchFeel(那边只管参数本身)。键必须都在 TouchFeel.KEYS 里
+const TOUCH_GROUPS := [
+	["指针", [&"pointer_gain", &"pointer_accel"]],
+	["轻点", [&"tap_slop_ratio", &"tap_max_sec", &"double_tap_sec"]],
+	["拖动与捏合", [&"drag_slop_ratio", &"pinch_deadzone_ratio"]],
+]
 ## 三个动作按钮的图标。模板只给了「齿轮 / 房子」两个字形，这三个是照模板同一套语言
 ## (纯白实心 + 圆头描边，200×200 视图框)在 Asset/ 里补画的，和 Asset/gear.svg 同处。
 const ICON_APPLY := preload("res://Asset/icon_apply.svg")
@@ -107,20 +130,24 @@ const POPUP_PAD := {
 	&"ui_cancel": JOY_BUTTON_B,
 }
 
-var _preset_opt: OptionButton
-## 难度列表(面板内 Control)：绝对定位在难度值控件正下方，见 _make_preset_row
-var _preset_list: PanelContainer
-var _preset_open := false
-## 列表展开时被高亮的那一项(手柄上下移动它，A 选中它)。展开时从当前档位起步。
-var _preset_hl := 0
+## 面板内下拉框的状态。**下标就是 OPT_* 那两个常量**，两个都在 _build_ui 里按顺序建好，
+## 所以这里直接开两格，不用动态扩容。
+##   _opt_btn  值控件本体(模板的 OptionButton)
+##   _opt_list 面板内那份列表：绝对定位在值控件正下方，见 _build_opt_list
+##   _opt_open 该下拉是否展开
+##   _opt_hl   展开时被高亮的那一项(手柄上下移动它，A 选中它)，展开时从当前档位起步
+var _opt_btn: Array = [null, null]
+var _opt_list: Array = [null, null]
+var _opt_open: Array = [false, false]
+var _opt_hl: Array = [0, 0]
 ## 弹窗开着时临时补进 ui_* 的手柄键位(见 POPUP_PAD 的说明)，用来精确摘除
 var _pad_added: Array[StringName] = []
 ## 写预设期间为 true：挡住 value_changed 回头的"反查预设"，
 ## 否则刚选中的档位会被自己写下去的值立刻改成「自定义」
 var _syncing := false
-## 抽屉里那摞面板占的**整块区域**(设置卡片 + 独立的按钮条，含中间那道缝)。
+## 抽屉里那摞面板占的**整块区域**(页签条 + 设置卡片 + 底部按钮条，含中间那两道缝)。
 ## 用来判断"鼠标点在菜单外面"(点外面就收起抽屉)：判据取整块而不是某一张卡片，
-## 否则点在按钮条上(它在卡片之外)会被当成"点外面"而把抽屉关掉。
+## 否则点在页签条或按钮条上(它们都在卡片之外)会被当成"点外面"而把抽屉关掉。
 var _menu_area: Control
 var _col_row: HBoxContainer
 var _row_row: HBoxContainer
@@ -129,7 +156,19 @@ var _apply_btn: Button
 var _restart_btn: Button
 var _close_btn: Button
 var _palette_btns: Array[Button] = []
+## 当前这一页的手柄可聚焦项。**切页时由 _rebuild_controls() 换成另一页那份**，
+## 于是 _goto / _goto_vertical / _adjust / _activate 那些老代码一行都不用改
 var _controls: Array = []
+## 两页各自的可聚焦项(切页时从这里挑一份塞进 _controls)
+var _controls_basic: Array = []
+var _controls_touch: Array = []
+## 页容器与页签按钮。tabs_visible 关掉，由 _tab_btns 驱动(照模板 main_scene 的形态)
+var _tabs: TabContainer
+var _tab_btns: Array[Button] = []
+## 第 2 页的滑条 → TouchFeel 字段名。读写都靠这张表，顺序 = 手柄导航顺序
+var _touch_rows: Array = []
+## 注入手感期间为 true：挡住 value_changed 回头再把同一份值发出去(会死循环)
+var _syncing_touch := false
 var _sel := 0
 var _color: Color = PALETTE[0]
 ## 英雄榜：档位名 → 那一行的秒数 Label(数据由 main 通过 set_best_times 注入)
@@ -177,21 +216,71 @@ func _build_ui() -> void:
 		margin.add_theme_constant_override(side, 14)
 	add_child(margin)
 
-	# 抽屉里竖着叠两张面板：上面是设置卡片，下面是独立出来的按钮条。
-	# 两张都用模板的面板样式盒(PanelContainer 走主题，不用手画)，
-	# 中间留 12px 缝 —— 缝露出来，"它是独立的一张"才看得出来。
+	# 抽屉里竖着叠三块：页签条、卡片(页容器)、底部按钮条。
+	# 三块都用模板的面板样式盒(PanelContainer 走主题，不用手画)，
+	# 中间留 12px 缝 —— 缝露出来，"它们是各自独立的一张"才看得出来。
+	# 页签条与按钮条按内容收窄并居中，只有中间的卡片横向撑满。
 	var stack := VBoxContainer.new()
 	stack.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	stack.add_theme_constant_override("separation", 12)
 	margin.add_child(stack)
 
+	# ---- 页签条：卡片**上方**一条按钮，与底部按钮条同一套皮肤、同样居中收窄 ----
+	# 照模板 main_scene 的做法：TabContainer 自带的 tab 栏藏掉(tabs_visible = false)，
+	# 由这一排 toggle 按钮进同一个 ButtonGroup 来驱动 current_tab。
+	var tab_bar := PanelContainer.new()
+	tab_bar.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	# 按内容收窄并在槽里居中 —— 与下面 buttons 那条同一套(skin 与内边距都照抄)
+	tab_bar.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+	tab_bar.theme = BTN_THEME
+	stack.add_child(tab_bar)
+	var tab_st := tab_bar.get_theme_stylebox("panel").duplicate() as StyleBoxFlat
+	if tab_st != null:
+		tab_st.content_margin_top = 10
+		tab_st.content_margin_bottom = 10
+		tab_st.content_margin_left = 14
+		tab_st.content_margin_right = 14
+		tab_bar.add_theme_stylebox_override("panel", tab_st)
+
+	var tab_btns := HBoxContainer.new()
+	tab_btns.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	tab_btns.add_theme_constant_override("separation", 10)
+	tab_btns.alignment = BoxContainer.ALIGNMENT_CENTER
+	tab_bar.add_child(tab_btns)
+
+	var tab_group := ButtonGroup.new()
+	for i in TAB_TITLES.size():
+		var tb := Button.new()
+		tb.text = TAB_TITLES[i]
+		tb.toggle_mode = true
+		tb.button_group = tab_group
+		# 照模板：**按下即切**(ACTION_MODE_BUTTON_PRESS)，不是松手才切
+		tb.action_mode = BaseButton.ACTION_MODE_BUTTON_PRESS
+		tb.focus_mode = Control.FOCUS_ALL
+		tb.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
+		tb.custom_minimum_size = Vector2(0, 30)
+		tb.button_pressed = (i == 0)          # 先按下第一颗，再接线(不会发 pressed)
+		tb.pressed.connect(_on_tab_pressed.bind(i))
+		tab_btns.add_child(tb)
+		_tab_btns.append(tb)
+
+	# ---- 卡片位置换成页容器：**每一页各自是一张模板面板**(照模板 main_scene 的形态) ----
+	# 页容器自己不画底板，否则会和页里的卡片叠出两层边与两层描边。
+	_tabs = TabContainer.new()
+	_tabs.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	# 不让它抢 ui_left/ui_right：那两个键位是相机平移与手柄焦点导航在用
+	_tabs.focus_mode = Control.FOCUS_NONE
+	_tabs.tabs_visible = false
+	_tabs.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	_tabs.add_theme_stylebox_override("panel", StyleBoxEmpty.new())
+	stack.add_child(_tabs)
+
 	# PanelContainer 用的是模板的面板样式(深紫 + 淡青描边 + 圆角 12 + 投影，
 	# 内边距 20 也来自样式盒，所以这里不再自己加 margin)
 	var panel := PanelContainer.new()
+	panel.name = "Basic"
 	panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	# 卡片吃掉剩余高度：按钮条按自身内容高贴在抽屉底部
-	panel.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	stack.add_child(panel)
+	_tabs.add_child(panel)
 	# "菜单区域" = 这摞面板整体，点外面收起的判据取它(见 _unhandled_input)
 	_menu_area = stack
 
@@ -200,15 +289,13 @@ func _build_ui() -> void:
 	vb.add_theme_constant_override("separation", 12)
 	panel.add_child(vb)
 
-	var title := Label.new()
-	title.text = "设置"
-	title.add_theme_font_size_override("font_size", 26)
-	vb.add_child(title)
-
+	# 这里原来有一个 26px 的「设置」大标题，已按需求去掉：
+	# 抽屉顶上那条页签("棋盘 / 手感")已经把"这是什么面板"说清楚了，
+	# 再顶一行大字只是重复，还白占约 46px 的纵向空间。
 	vb.add_child(_make_segment("棋盘尺寸"))
 
 	# 难度预设行(模板的下拉框控件)：选一档就把 列/行/雷 一起写下去
-	vb.add_child(_make_preset_row())
+	vb.add_child(_make_difficulty_row())
 
 	# 范围与跨字段约束一律取自 BoardSpec，界面不自带第二份副本
 	# 滑条初值取自 BoardSpec 的默认值(= 原版初级)，不在本文件里另写一份。
@@ -274,12 +361,29 @@ func _build_ui() -> void:
 	btns.add_child(_restart_btn)
 	btns.add_child(_close_btn)
 
-	# 手柄可聚焦项，顺序 = 上下导航顺序
-	_controls = [_preset_opt, _slider_of(_col_row), _slider_of(_row_row), _slider_of(_mine_row)]
-	_controls.append_array(_palette_btns)
-	_controls.append_array([_apply_btn, _restart_btn, _close_btn])
-	for c in _controls:
+	# 第 2 页挂进来(必须在第 1 页之后，页序 = _tabs 的子节点顺序)
+	_tabs.add_child(_build_touch_page())
+
+	# 手柄可聚焦项，**按页各存一份**，顺序 = 该页的上下导航顺序。
+	# 页签按钮也放进来(放在末尾)：不放的话手柄根本没有办法切到第 2 页 ——
+	# 左右方向键属于相机平移，ui_left/right 也没法用来翻页。
+	_controls_basic = [_opt_btn[OPT_DIFFICULTY], _slider_of(_col_row), _slider_of(_row_row), _slider_of(_mine_row)]
+	_controls_basic.append_array(_palette_btns)
+	_controls_basic.append_array([_apply_btn, _restart_btn, _close_btn])
+	_controls_basic.append_array(_tab_btns)
+
+	# 手感预设排在最前 —— 它就在手感页的第一行，与第 1 页"难度排第一"一致
+	_controls_touch = [_opt_btn[OPT_FEEL]]
+	for e in _touch_rows:
+		_controls_touch.append(e["slider"])
+	_controls_touch.append_array(_tab_btns)
+
+	for c in _controls_basic + _controls_touch:
 		(c as Control).focus_mode = Control.FOCUS_ALL
+
+	# 开局停在第 1 页(与页签按钮的初始按下状态一致)，并把 _controls 指向它
+	_tabs.current_tab = 0
+	_rebuild_controls()
 
 
 # ---- 模板控件包装：把模板的设置行拿来用，不在本文件里重画样式 ----
@@ -294,29 +398,113 @@ func _make_segment(title: String) -> HBoxContainer:
 
 ## 标题 + 滑条 + 数值 的设置行(模板控件)。
 ## suffix 走模板组件的 end_text：它把数值标签拼成 "<值> 列" 这样。
-## **必须在入树之前把 end_text 与 value 设好** —— 组件的 _ready 会读它们来初始化标签。
-func _make_slider_row(title: String, suffix: String, mn: int, mx: int, val: int) -> HBoxContainer:
+## **必须在入树之前把 end_text / value / decimals / display_scale 全设好** ——
+## 组件的 _ready 会读它们来初始化那个数值标签。
+## 后三个参数有默认值，所以第 1 页那几条整数滑条照旧只传前五个。
+func _make_slider_row(title: String, suffix: String, mn: float, mx: float, val: float,
+		step := 1.0, decimals := 0, display_scale := 1.0) -> HBoxContainer:
 	var row: HBoxContainer = ROW_SLIDER.instantiate()
 	row.get_node("LabelTitle").text = title
 	var s: HSlider = row.get_node("HSlider")
 	s.min_value = mn
 	s.max_value = mx
-	s.step = 1.0
+	s.step = step
 	s.value = val
 	s.focus_mode = Control.FOCUS_ALL
 	row.end_text = suffix
+	row.decimals = decimals
+	row.display_scale = display_scale
 	return row
 
 func _slider_of(row: HBoxContainer) -> HSlider:
 	return row.get_node("HSlider")
 
 
-## 预设色板：**固定 12 列**的网格(单选 ButtonGroup，选中的多一圈白描边)。
+# ---- 第 2 页：手感 ----
+
+## 手感页。滑条**按 TouchFeel.row_specs() 建** —— 范围、步长、标题、小数位、
+## 显示缩放全部从那里取，本文件不写第二份；分组标题取自 TOUCH_GROUPS。
+## 拖滑条只发 touch_feel_changed(实时生效)，不落盘，落盘在 main 收起抽屉时做一次。
+func _build_touch_page() -> PanelContainer:
+	var page := PanelContainer.new()
+	page.name = "Touch"
+	page.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var tvb := VBoxContainer.new()
+	tvb.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	# 这一页全是滑条，行距比第 1 页收紧一点：不用留出分段线与色板那点呼吸感
+	tvb.add_theme_constant_override("separation", 10)
+	page.add_child(tvb)
+
+	# 预设栏放**最上面**：它是这一页的起点 —— 先挑一档，再用下面的滑条微调。
+	# 与难度行同一套控件、同一套机制(见 _make_opt_row)，所以风格天然一致
+	tvb.add_child(_make_feel_preset_row())
+
+	var base := TouchFeel.defaults()
+	var specs := {}
+	for spec in TouchFeel.row_specs():
+		specs[spec[0]] = spec
+
+	for grp in TOUCH_GROUPS:
+		tvb.add_child(_make_segment(grp[0]))
+		for key in grp[1]:
+			var spec: Array = specs[key]
+			var row := _make_slider_row(spec[1], spec[2], spec[3], spec[4],
+					base.get(key), spec[5], spec[6], spec[7])
+			var s := _slider_of(row)
+			# value_changed 的参数是值本身，_on_touch_changed 用不到它(直接读滑条)
+			s.value_changed.connect(_on_touch_changed)
+			_touch_rows.append({"slider": s, "key": key})
+			tvb.add_child(row)
+
+	return page
+
+
+## 切页。切之前必须做两件事，否则会踩到本项目吃过大亏的两个坑：
+##  1) **收起两块下拉列表** —— 它们是挂在面板根节点上的绝对定位孤儿(见 _build_opt_list)，
+##     不跟着页容器一起隐藏；不收起就会飘在"刚切过去的那一页"上面，
+##     而且它的定位基准(值控件的 global_position)已经随着那一页隐藏失去意义；
+##  2) **还焦点** —— 隐藏的 Control 不会自动交还焦点，留着会被它吃掉空格/回车
+##     (ui_accept 真的绑了这两个键，空格同时还绑着 new_game)。
+func _on_tab_pressed(idx: int) -> void:
+	if _tabs == null or _tabs.current_tab == idx:
+		return
+	_collapse_all_opts()
+	_release_focus()
+	_tabs.current_tab = idx
+	_rebuild_controls()
+	_goto(0)                    # 焦点落到新一页的第一项
+
+
+## 把 _controls 换成"当前这一页"那一份。**页签按钮在每一页的末尾都有一份**，
+## 所以手柄从任何一页都能翻到另一页(见 _build_ui 里那段的说明)
+func _rebuild_controls() -> void:
+	_controls = _controls_touch if _tabs.current_tab == 1 else _controls_basic
+	_sel = 0
+
+
+# ---- 手感：注入 / 取值 / 变化 ----
+
+## 手感被改动：**实时发出去**(main 收到就写进生效中的对象)，这里不落盘
+func _on_touch_changed(_v: float = 0.0) -> void:
+	if _syncing_touch:
+		return                  # 正在注入，别把同一份值再发一轮
+	# 滑条一动就回显预设：值不再等于「默认」那一档，下拉当场变成「自定义」
+	# (与难度那边"手改列/行/雷就回显自定义"同一个行为)
+	_refresh_feel_preset_selection()
+	touch_feel_changed.emit(touch_feel())
+
+
+## 「恢复默认」已由上方的**手感预设下拉**取代(选「默认」那一档就是恢复基线)，
+## 所以这里不再单独留一个按钮，也不再单独接一条信号路径 ——
+## 那条路径现在走 _on_feel_preset_selected。
+
+
+## 预设色板：**固定 14 列**的网格(单选 ButtonGroup，选中的多一圈白描边)。
 ## 色块的底就是颜色本身，所以样式盒是逐按钮覆盖的 —— 这是唯一没法靠主题解决的部分。
 ##
 ## 为什么不用 HFlowContainer：它是**按可用宽度**折行的，宽度不受约束时不会换成第二行，
-## 而是把整个面板撑宽(加了 6 个颜色之后就是这样)。改成 GridContainer(columns=12) 之后
-## 布局与面板宽度**互相独立**：永远是 12 + 12，面板宽度回到原来的 474px。
+## 而是把整个面板撑宽。改成 GridContainer 之后布局与面板宽度**互相独立**：
+## 28 格正好 14 × 2 两整行，色板宽度 14×34 + 13×6 = 554，与面板宽度无关。
 func _make_palette() -> Control:
 	var group := ButtonGroup.new()
 	var grid := GridContainer.new()
@@ -420,6 +608,28 @@ func set_spec(spec: BoardSpec) -> void:
 	_syncing = false
 	_refresh_preset_selection()         # 反查档位(这是回显，不发 item_selected)
 
+## 注入当前**生效中**的手感：第 2 页的滑条与开关回到这一份。
+## 与 set_spec 一样由 main 喂(main 才是"生效中的值是哪一份"的知情者)：
+## 开机恢复存档后喂一次，之后每次拉开抽屉前再喂一次 —— 面板自己不去问 TouchBindings。
+## 注入期间 _syncing_touch 挡着，不会反过来发 touch_feel_changed。
+func set_touch_feel(feel: TouchFeel) -> void:
+	if feel == null or _touch_rows.is_empty():
+		return                          # 还没 _build_touch_page()，没有控件可写
+	var c := feel.clamped()
+	_syncing_touch = true
+	for e in _touch_rows:
+		(e["slider"] as HSlider).value = c.get(e["key"])
+	_syncing_touch = false
+	_refresh_feel_preset_selection()     # 注入完顺手把下拉回显对上
+
+## 面板上当前这一份手感(**新建的值对象**，与 Board.spec() 同一套约定)。
+## main 在收起抽屉时拿它去落盘。
+func touch_feel() -> TouchFeel:
+	var f := TouchFeel.new()
+	for e in _touch_rows:
+		f.set(e["key"], (e["slider"] as HSlider).value)
+	return f.clamped()
+
 ## 图标按钮 —— 照模板 ButtonHome / ButtonSetting 的写法：
 ## 只放图标不放文字(icon_max_width 限高 + 图标居中 + 手型光标)，说明放 tooltip。
 ## 直接摆文字在这个皮肤里很突兀：模板的按钮都是"字形 + 底色"。
@@ -436,55 +646,81 @@ func _make_button(icon: Texture2D, tip: String) -> Button:
 
 # ---- 取值 / 提请求 ----
 
-## 难度预设行。**显示仍用模板那个 OptionButton 本体**（主题里的圆角底与下拉箭头、
-## 160 宽、展开、字号 14 全部原样继承，外观与原来完全一致），只是**不让它弹出自带菜单**
+## 难度行（第 1 页顶部）：档位名 + 「自定义」。
+## 「自定义」只是个状态(索引 == PRESETS.size())，选中它不改任何数值 ——
+## 滑条对不上任何一档时由 _refresh_preset_selection 回显到它。
+func _make_difficulty_row() -> HBoxContainer:
+	var names := []
+	for p in PRESETS:
+		names.append(p["name"])
+	names.append("自定义")
+	return _make_opt_row(OPT_DIFFICULTY, "难度", names)
+
+## 手感预设行（手感页顶部）：和难度行**同一个控件、同一套机制**，所以风格天然一致。
+## 「自定义」同样只是个状态：滑条的值不等于任何一档时回显到它(见 _refresh_feel_preset_selection)
+func _make_feel_preset_row() -> HBoxContainer:
+	var names := []
+	for p in FEEL_PRESETS:
+		names.append(p["name"])
+	names.append("自定义")
+	return _make_opt_row(OPT_FEEL, "手感预设", names)
+
+## 下拉框的值控件行。**两个下拉共用这一套**：0 = 难度，1 = 手感预设(见 OPT_*)。
+## **显示仍用模板那个 OptionButton 本体**（主题里的圆角底与下拉箭头、160 宽、展开、
+## 字号 14 全部原样继承，外观与原来完全一致），只是**不让它弹出自带菜单**
 ## —— 那个菜单是独立 Window，会吞触摸(虚拟光标冻住)、永远盖在主视口之上、点外面也关不掉。
-## 展开/选择改由面板内的列表负责(_build_preset_list)。
+## 展开/选择改由面板内的列表负责(_build_opt_list)。
 ##
 ## 怎么堵的：OptionButton 打开窗口的动作在 **C++ 的 pressed() 虚函数**里 ——
 ## 实测覆盖脚本的 _pressed()(那是给 GDScript 的 gdvirtual，并非同一个函数)与断开
 ## pressed 信号**都拦不住**，窗口照弹。所以改在**窗口真正显示之前**的同帧把它收起
 ## (about_to_popup → call_deferred hide)：既不会画出来，也不会留下抢焦点的窗口。
-func _make_preset_row() -> HBoxContainer:
+##
+## 接线一律用 lambda 而不是 bind：item_selected 自带一个 idx 参数，bind 是**追加**在
+## 它后面，参数顺序会变成 (idx, opt) 与自觉相反 —— 用 lambda 把顺序写死，不会记错。
+func _make_opt_row(opt: int, label: String, names: Array) -> HBoxContainer:
 	var row: HBoxContainer = ROW_OPTION.instantiate()
-	row.get_node("Label").text = "难度"
-	_preset_opt = row.get_node("OptionButton")
-	_preset_opt.clear()
-	for p in PRESETS:
-		_preset_opt.add_item(p["name"])
-	_preset_opt.add_item("自定义")          # 索引 == PRESETS.size()，只是个状态
-	_preset_opt.item_selected.connect(_on_preset_selected)
+	row.get_node("Label").text = label
+	var btn: OptionButton = row.get_node("OptionButton")
+	btn.clear()
+	for n in names:
+		btn.add_item(str(n))
 	# 自带菜单：弹出前同帧收起(理由见函数头)。它只是"关掉"这个副作用，
-	# 外观、取值、键盘/手柄激活全部照旧；我接上的 _toggle_presets 是唯一的展开入口。
-	var pop := _preset_opt.get_popup()
+	# 外观、取值、键盘/手柄激活全部照旧；我接上的 _toggle_opt 是唯一的展开入口。
+	var pop := btn.get_popup()
 	pop.about_to_popup.connect(func() -> void: pop.hide.call_deferred())
-	_preset_opt.pressed.connect(_toggle_presets)
-	_build_preset_list()
+	btn.pressed.connect(func() -> void: _toggle_opt(opt))
+	btn.item_selected.connect(func(i: int) -> void: _on_opt_selected(opt, i))
+	_opt_btn[opt] = btn
+	_build_opt_list(opt)
 	return row
 
 ## 列表本体：挂在 **SettingsPanel 根节点**下(不是容器里)，因为要绝对定位到值控件正下方，
 ## 而容器会强制排布子节点。挂在根上还顺便保证它画在所有行之上 —— 注意**不要**给
 ## z_index：那是画布内全局排序，会把 UILayer 里的虚拟光标一起压在下面。
-func _build_preset_list() -> void:
-	_preset_list = PanelContainer.new()
-	_preset_list.visible = false
-	_preset_list.mouse_filter = Control.MOUSE_FILTER_STOP   # 点在列表上不算"点外面"
+func _build_opt_list(opt: int) -> void:
+	var list := PanelContainer.new()
+	list.visible = false
+	list.mouse_filter = Control.MOUSE_FILTER_STOP   # 点在列表上不算"点外面"
 	# 外框也用弹出菜单那一套面板底色(主题里 PopupMenu/styles/panel)，不自己配
-	_preset_list.add_theme_stylebox_override("panel", UI_THEME.get_stylebox("panel", "PopupMenu"))
+	list.add_theme_stylebox_override("panel", UI_THEME.get_stylebox("panel", "PopupMenu"))
 	var vb := VBoxContainer.new()
 	vb.add_theme_constant_override("separation", 0)
-	_preset_list.add_child(vb)
-	for i in _preset_opt.item_count:
-		vb.add_child(_make_preset_item(i))
-	_sync_preset_marks()
-	add_child(_preset_list)
+	list.add_child(vb)
+	var btn: OptionButton = _opt_btn[opt]        # 见 _sync_opt_marks 的说明：先落到带类型的局部变量
+	for i in btn.item_count:
+		vb.add_child(_make_opt_item(opt, i))
+	_opt_list[opt] = list
+	add_child(list)
+	_sync_opt_marks(opt)
 
 ## 单项：**照原来弹出菜单的样子做** —— 左边一个"复选框"图标 + 文字，悬停/按下用菜单的
 ## 高亮底色，平时透明(菜单项不是按钮)。素材与配色全部取自主题里 PopupMenu 那一组，
 ## 一处都不自创，所以观感和原来逐项一致。
-func _make_preset_item(i: int) -> Button:
+func _make_opt_item(opt: int, i: int) -> Button:
+	var btn: OptionButton = _opt_btn[opt]        # 同上：无类型 Array 取下标得到的是 Variant
 	var b := Button.new()
-	b.text = _preset_opt.get_item_text(i)
+	b.text = btn.get_item_text(i)
 	b.alignment = HORIZONTAL_ALIGNMENT_LEFT
 	b.flat = true                       # 平时无底
 	b.custom_minimum_size = Vector2(160, 28)
@@ -497,92 +733,133 @@ func _make_preset_item(i: int) -> Button:
 	b.add_theme_color_override("font_color", UI_THEME.get_color("font_color", "PopupMenu"))
 	b.add_theme_font_override("font", UI_THEME.get_font("font", "PopupMenu"))
 	b.add_theme_font_size_override("font_size", UI_THEME.get_font_size("font_size", "PopupMenu"))
-	b.pressed.connect(_on_preset_picked.bind(i))
+	b.pressed.connect(func() -> void: _on_opt_picked(opt, i))
 	return b
 
 ## 当前档位用"选中/未选中"两个复选框图标标出 —— 和原弹出菜单的单选标记是同一对素材
-func _sync_preset_marks() -> void:
-	if _preset_list == null or _preset_opt == null:
+## (值控件必须先落到带类型的局部变量上：_opt_btn 是无类型 Array，直接取下标是 Variant，
+##  下面 `var on :=` 那种写法会推不出类型而编译不过)
+func _sync_opt_marks(opt: int) -> void:
+	var vb := _opt_items(opt)
+	var btn: OptionButton = _opt_btn[opt]
+	if vb == null or btn == null:
 		return
-	var vb := _preset_list.get_child(0) as VBoxContainer
 	for i in vb.get_child_count():
 		var b := vb.get_child(i) as Button
-		var on := (i == _preset_opt.selected)
+		var on: bool = (i == btn.selected)
 		b.icon = UI_THEME.get_icon("radio_checked" if on else "radio_unchecked", "PopupMenu")
 
-func _toggle_presets() -> void:
-	if _preset_open:
-		_collapse_presets()
+func _toggle_opt(opt: int) -> void:
+	if _opt_open[opt]:
+		_collapse_opt(opt)
 	else:
-		_expand_presets()
+		_expand_opt(opt)
 
-func _expand_presets() -> void:
-	if _preset_list == null or _preset_opt == null:
+func _expand_opt(opt: int) -> void:
+	var list: PanelContainer = _opt_list[opt]
+	var btn: OptionButton = _opt_btn[opt]
+	if list == null or btn == null:
 		return
-	_preset_list.reset_size()               # 先按内容算出尺寸
-	_preset_list.size.x = maxf(_preset_list.size.x, _preset_opt.size.x)
-	_preset_list.visible = true
-	_preset_list.global_position = _preset_opt.global_position \
-		+ Vector2(0.0, _preset_opt.size.y + 4.0)
-	_preset_open = true
+	# 同一时刻只开一个：别的还开着就先收掉，否则两块列表会叠在一起
+	for i in _opt_open.size():
+		if i != opt and _opt_open[i]:
+			_collapse_opt(i, false)
+	list.reset_size()                       # 先按内容算出尺寸
+	list.size.x = maxf(list.size.x, btn.size.x)
+	list.visible = true
+	list.global_position = btn.global_position + Vector2(0.0, btn.size.y + 4.0)
+	_opt_open[opt] = true
 	# 手柄：列表项不在 _controls 里(面板原有的手柄导航看不见它们)，所以展开时
 	# 主动把焦点放到当前档位那一项上，之后上/下与 A 由 _input 直接接管。
-	_preset_hl = clampi(_preset_opt.selected, 0, maxi(0, _preset_item_count() - 1))
-	_focus_preset_item()
+	_opt_hl[opt] = clampi(btn.selected, 0, maxi(0, _opt_item_count(opt) - 1))
+	_focus_opt_item(opt)
 
-func _collapse_presets() -> void:
-	if _preset_list == null or not _preset_open:
+## 收起。[param give_focus] = false 时不把焦点还给值控件：切页 / 关抽屉 / 重开一局
+## 这类"整块都要走了"的场合不该再去抢焦点(旧代码在这里 grab 完又立刻 release)
+func _collapse_opt(opt: int, give_focus := true) -> void:
+	var list: PanelContainer = _opt_list[opt]
+	var btn: OptionButton = _opt_btn[opt]
+	if list == null or not _opt_open[opt]:
 		return
-	_preset_list.visible = false
-	_preset_open = false
-	if _preset_opt != null:
-		_preset_opt.grab_focus()            # 焦点还给难度值控件，手柄不会"丢在某处"
+	list.visible = false
+	_opt_open[opt] = false
+	if give_focus and btn != null:
+		btn.grab_focus()                    # 焦点还给值控件，手柄不会"丢在某处"
 
-## 选中某档：**直接调 _on_preset_selected**，不依赖 OptionButton 的信号 ——
+## 两个都收掉。切页与关抽屉都要调 —— 两块列表都挂在面板根节点上，
+## 不跟着页容器一起隐藏，留着就会飘在另一页上面
+func _collapse_all_opts() -> void:
+	for i in _opt_list.size():
+		_collapse_opt(i, false)
+
+## 点面板内列表的某一项：**分派回各自的处理函数**，不依赖 OptionButton 的信号 ——
 ## 实测 select(idx) 只改了 selected，并不发 item_selected(于是数值没写下去、
-## 按钮文字也不更新)。_on_preset_selected 内部自己会把 selected 定下来。
-func _on_preset_picked(idx: int) -> void:
-	_collapse_presets()
-	_on_preset_selected(idx)
+## 按钮文字也不更新)。两个处理函数内部自己会把 selected 定下来。
+func _on_opt_picked(opt: int, idx: int) -> void:
+	_collapse_opt(opt)
+	_on_opt_selected(opt, idx)
+
+## OptionButton 自己的 item_selected 也汇到这里。自带菜单已被抑制，所以这条路
+## 平时走不到，留着是防止哪天菜单的抑制失效时行为退化。
+func _on_opt_selected(opt: int, idx: int) -> void:
+	if opt == OPT_DIFFICULTY:
+		_on_preset_selected(idx)
+	elif opt == OPT_FEEL:
+		_on_feel_preset_selected(idx)
 
 ## 展开中，点在列表与值按钮之外 → 收起。
 ## 面板内的列表**没有** Window 那种焦点陷阱，这条必须自己加，否则它会一直挂着。
 ## 用 _input 而不是 _unhandled_input：后者看不到被 GUI 消费掉的点击(比如点在别的按钮上)。
-func _preset_items() -> VBoxContainer:
-	return _preset_list.get_child(0) as VBoxContainer
+func _opt_items(opt: int) -> VBoxContainer:
+	var list: PanelContainer = _opt_list[opt]
+	return null if list == null else list.get_child(0) as VBoxContainer
 
-func _preset_item_count() -> int:
-	var vb := _preset_items()
+func _opt_item_count(opt: int) -> int:
+	var vb := _opt_items(opt)
 	return 0 if vb == null else vb.get_child_count()
 
-func _focus_preset_item() -> void:
-	var vb := _preset_items()
+func _focus_opt_item(opt: int) -> void:
+	var vb := _opt_items(opt)
 	if vb == null or vb.get_child_count() == 0:
 		return
-	_preset_hl = clampi(_preset_hl, 0, vb.get_child_count() - 1)
-	(vb.get_child(_preset_hl) as Button).grab_focus()
+	var hl: int = _opt_hl[opt]                   # 同上：Variant → int 要显式落一次
+	hl = clampi(hl, 0, vb.get_child_count() - 1)
+	_opt_hl[opt] = hl
+	(vb.get_child(hl) as Button).grab_focus()
+
+## 当前展开着的那个下拉；都没开返回 -1。同一时刻只允许开一个(见 _expand_opt)
+func _open_opt() -> int:
+	for i in _opt_open.size():
+		if _opt_open[i]:
+			return i
+	return -1
 
 ## 手柄 A 按下**当前焦点控件**。为什么要自己按：本项目的 ui_accept 里没有任何手柄键位
 ## (刻意的，见 POPUP_PAD 的说明)，所以引擎不会把手柄 A 送给焦点控件。
 ##
 ## **直接调用各自的处理函数，不要用 pressed.emit()**：
-##   · 难度值控件是 OptionButton —— 它内部**也**连着 pressed(那条连接会去弹它自带的
+##   · 下拉框的值控件是 OptionButton —— 它内部**也**连着 pressed(那条连接会去弹它自带的
 ##     Window)，而且它作为 Button 子类的 toggle 语义不确定；用 emit 时这两条分支
-##     都可能绕开我接的 _toggle_presets，症状就是"按 A 打不开下拉菜单"。
+##     都可能绕开我接的 _toggle_opt，症状就是"按 A 打不开下拉菜单"。
 ##   · 应用/重启/关闭直接调面板自己的处理函数，语义明确、不会触发别的连接。
 ##   · 色板：直接切 button_pressed(它会发 toggled，_color 靠这个回调)。
 func _press_focused_control() -> void:
 	var f := get_viewport().gui_get_focus_owner()
 	if f == null:
 		return
-	if f == _preset_opt:
-		_toggle_presets()
+	if _opt_btn.has(f):
+		# 两个下拉的值控件都在这个数组里，用下标找回它是哪一个
+		_toggle_opt(_opt_btn.find(f))
 	elif f == _apply_btn:
 		_on_apply()
 	elif f == _restart_btn:
 		_on_restart()
 	elif f == _close_btn:
 		close_requested.emit()
+	elif _tab_btns.has(f):
+		# 页签按钮要**显式**处理，别落到下面的通用 toggle 分支：它属于 ButtonGroup，
+		# 把 button_pressed 取反会被 group 挡回来，表现就是"按 A 没反应"
+		_on_tab_pressed(_tab_btns.find(f))
 	elif f is BaseButton:
 		var b := f as BaseButton
 		if b.toggle_mode:
@@ -591,16 +868,18 @@ func _press_focused_control() -> void:
 			b.pressed.emit()
 	get_viewport().set_input_as_handled()
 
-## 当前"真正被高亮"的是哪一项 —— **以引擎的焦点为准**，不是我记的 _preset_hl。
+## 当前"真正被高亮"的是哪一项 —— **以引擎的焦点为准**，不是我记的 _opt_hl。
 ## **焦点不在列表里时返回 -1**（这点很关键：摇杆可以把焦点移到列表之外、例如下方的
 ## "应用"键上，那时 A 绝不能被当成"选中列表项"，否则就是"应用没反应、反而又激活了子项"）。
 ##
 ## 为什么必须看引擎焦点：列表项的高亮有**两条**来源，而它们只在一处汇合(引擎的焦点)——
 ##   · 左摇杆：绑在 ui_up/ui_down 上，走引擎自带的焦点导航，把焦点挪到别的项上，
-##     **完全不经过本脚本**，所以 _preset_hl 不会跟着变；
+##     **完全不经过本脚本**，所以 _opt_hl 不会跟着变；
 ##   · 十字键：走本脚本下面的 move_up/move_down 分支，那里最后也是 grab_focus()。
-func _focused_preset_index() -> int:
-	var vb := _preset_items()
+func _focused_opt_index(opt: int) -> int:
+	if opt < 0:
+		return -1
+	var vb := _opt_items(opt)
 	if vb == null:
 		return -1
 	var f := get_viewport().gui_get_focus_owner()
@@ -617,26 +896,27 @@ func _focused_preset_index() -> int:
 ##   - 上/下   → 在列表内移动高亮
 ##   - 鼠标左键点在列表与值控件之外 → 收起
 func _input(event: InputEvent) -> void:
+	# 当前展开着的那个下拉(-1 = 都没开)。手柄 A 与后面几段都要用它
+	var oi := _open_opt()
 	# **手柄 A 最先处理，且不受"列表是否开着"影响。**
-	#   焦点在难度列表里 → 选中那一项；焦点在别的控件上(应用/重启/关闭/色板/难度…) → 按下它。
+	#   焦点在某个列表里 → 选中那一项；焦点在别的控件上(应用/重启/关闭/色板/难度…) → 按下它。
 	#
-	# 为什么必须放在 _preset_open 判断之前：A 确认会把列表收起，之后用户用摇杆移到"应用"
+	# 为什么必须放在"列表开着吗"判断之前：A 确认会把列表收起，之后用户用摇杆移到"应用"
 	# 再按 A 时**列表已经关了** —— 旧代码这时整段不跑，事件落到 _unhandled_input 的
 	# _activate()，而 _activate() 读的是面板自己的 _sel(只有十字键更新它，摇杆动的是引擎
 	# 焦点)，_sel 还停在 open() 里 _goto(0) 放的第 0 项 = 难度 → 于是**又把下拉菜单打开**。
 	# 症状正是"摇杆移到应用按 A，却又激活了下拉菜单"。
-	# (第 749 行那段旧注释描述过同一类故障：鼠标左键也绑在 action_a 上，机制一样。)
 	if event is InputEventJoypadButton and event.is_action_pressed(&"action_a"):
 		if not visible:
 			return
-		var hi := _focused_preset_index()
+		var hi := _focused_opt_index(oi)     # oi < 0 时它直接返回 -1
 		if hi >= 0:
-			_on_preset_picked(hi)
+			_on_opt_picked(oi, hi)
 		else:
 			_press_focused_control()
 		get_viewport().set_input_as_handled()   # 别再让 _activate() 按 _sel 动作第二次
 		return
-	if not _preset_open:
+	if oi < 0:
 		return
 	# **只接管手柄按钮** —— 别写成"有 action_a 就接管"：桌面的**左键同样映射到
 	# action_a**(右键同理到 action_b)，那样会把鼠标点击在 _input 阶段就吃掉，
@@ -645,18 +925,16 @@ func _input(event: InputEvent) -> void:
 	# 引擎自带的焦点确认够不到它)。
 	if event is InputEventJoypadButton:
 		if event.is_action_pressed(&"action_b"):
-			if _preset_open:
-				_collapse_presets()
-				get_viewport().set_input_as_handled()
+			_collapse_opt(oi)
+			get_viewport().set_input_as_handled()
 			return
-		if _preset_open and (event.is_action_pressed(&"move_up")
-				or event.is_action_pressed(&"move_down")):
-			var n := _preset_item_count()
+		if event.is_action_pressed(&"move_up") or event.is_action_pressed(&"move_down"):
+			var n := _opt_item_count(oi)
 			if n > 0:
 				# 十字键：从**当前焦点**出发移动一格，再交回引擎焦点(与摇杆同一条最终状态)
-				_preset_hl = wrapi(_focused_preset_index()
+				_opt_hl[oi] = wrapi(_focused_opt_index(oi)
 					+ (1 if event.is_action_pressed(&"move_down") else -1), 0, n)
-				_focus_preset_item()
+				_focus_opt_item(oi)
 			get_viewport().set_input_as_handled()
 			return
 	if not (event is InputEventMouseButton):
@@ -665,9 +943,11 @@ func _input(event: InputEvent) -> void:
 	if not mb.pressed or mb.button_index != MOUSE_BUTTON_LEFT:
 		return
 	var at := mb.position
-	if _preset_list.get_global_rect().has_point(at) or _preset_opt.get_global_rect().has_point(at):
+	var list: PanelContainer = _opt_list[oi]
+	var btn: OptionButton = _opt_btn[oi]
+	if list.get_global_rect().has_point(at) or btn.get_global_rect().has_point(at):
 		return
-	_collapse_presets()
+	_collapse_opt(oi)
 
 ## 列表展开期间**只补手柄键位**(十字键/A/B → ui_up/ui_down/ui_accept/ui_cancel)，
 ## 之后交给引擎自带的焦点导航；一收起立刻摘掉，项目原有绑定绝不碰。
@@ -699,7 +979,8 @@ func _find_pad_event(action: StringName, button: int) -> InputEvent:
 ## 写值会触发 value_changed → 回头反查预设，那样刚选中的档位会被立刻改成「自定义」，
 ## 所以整段用 _syncing 挡着，最后再自己把选中项定下来。
 func _on_preset_selected(idx: int) -> void:
-	if _preset_opt == null or idx < 0 or idx >= PRESETS.size():
+	var btn: OptionButton = _opt_btn[OPT_DIFFICULTY]
+	if btn == null or idx < 0 or idx >= PRESETS.size():
 		return                              # 「自定义」不改数值
 	var p: Dictionary = PRESETS[idx]
 	_syncing = true
@@ -707,9 +988,9 @@ func _on_preset_selected(idx: int) -> void:
 	_slider_of(_row_row).value = p["rows"]
 	_sync_mine_max()                        # 雷数上限先跟上，否则大雷数会被旧上限夹掉
 	_slider_of(_mine_row).value = p["mines"]
-	_preset_opt.selected = idx
+	btn.selected = idx
 	_syncing = false
-	_sync_preset_marks()
+	_sync_opt_marks(OPT_DIFFICULTY)
 
 ## 列/行变了：先修雷数上限，再回显预设
 func _on_size_changed(_v: float = 0.0) -> void:
@@ -719,7 +1000,8 @@ func _on_size_changed(_v: float = 0.0) -> void:
 ## 按当前三个值反查预设，对不上任何一档就落到最后一项「自定义」。
 ## 这是"回显"不是"选择"：直接给 OptionButton.selected 赋值不会发 item_selected。
 func _refresh_preset_selection(_v: float = 0.0) -> void:
-	if _preset_opt == null or _syncing:
+	var btn: OptionButton = _opt_btn[OPT_DIFFICULTY]
+	if btn == null or _syncing:
 		return
 	var c := int(_slider_of(_col_row).value)
 	var r := int(_slider_of(_row_row).value)
@@ -730,8 +1012,40 @@ func _refresh_preset_selection(_v: float = 0.0) -> void:
 		if p["cols"] == c and p["rows"] == r and p["mines"] == m:
 			idx = i
 			break
-	_preset_opt.selected = idx
-	_sync_preset_marks()
+	btn.selected = idx
+	_sync_opt_marks(OPT_DIFFICULTY)
+
+## 选中某一档手感预设：把该档的值写进面板，**再**由 _on_touch_changed 实时生效。
+## 与难度那边一样，写值期间靠 _syncing_touch 挡住 value_changed 回头反查。
+func _on_feel_preset_selected(idx: int) -> void:
+	var btn: OptionButton = _opt_btn[OPT_FEEL]
+	if btn == null or idx < 0 or idx >= FEEL_PRESETS.size():
+		return                              # 「自定义」不改数值
+	var f: TouchFeel = FEEL_PRESETS[idx]["feel"]
+	set_touch_feel(f if f != null else TouchFeel.defaults())
+	btn.selected = idx
+	_sync_opt_marks(OPT_FEEL)
+	# set_touch_feel 被 _syncing_touch 挡着不发信号，所以这里补发一次 ——
+	# 否则下拉选了、手感却没跟着变
+	touch_feel_changed.emit(touch_feel())
+
+## 按当前滑条的值反查手感预设，对不上任何一档就落到最后一项「自定义」。
+## 滑条一动就会走到这里(见 _on_touch_changed)，所以下拉会实时跟着变成「自定义」——
+## 与难度那边"手改列/行/雷就回显自定义"是同一个行为
+func _refresh_feel_preset_selection() -> void:
+	var btn: OptionButton = _opt_btn[OPT_FEEL]
+	if btn == null or _syncing_touch:
+		return
+	var cur := touch_feel()
+	var idx := FEEL_PRESETS.size()          # 默认「自定义」
+	for i in FEEL_PRESETS.size():
+		var f: TouchFeel = FEEL_PRESETS[i]["feel"]
+		var want: TouchFeel = f if f != null else TouchFeel.defaults()
+		if cur.equals(want.clamped()):
+			idx = i
+			break
+	btn.selected = idx
+	_sync_opt_marks(OPT_FEEL)
 
 ## 雷数上限 = 列 × 行 - 1(至少留一格给首击)。
 ## HSlider 在 max 变小时会自己把 value 夹回去，并触发 value_changed 刷新标签。
@@ -768,7 +1082,7 @@ func open() -> void:
 
 func close() -> void:
 	_kill_tween()
-	_collapse_presets()                 # 难度列表还开着就一并收掉(连带摘掉临时键位)
+	_collapse_all_opts()                # 两块下拉列表还开着就一并收掉(它们不随页隐藏)
 	# 在隐藏前还回焦点：open() 时 _goto(0) 抓住了某个控件，
 	# 而隐藏的 Control 不会自动释放焦点 —— 留着的话**空格/回车**(ui_accept 里真的
 	# 绑了这两个键，而空格同时还绑着 new_game)会被那个隐形控件吃掉，棋盘收不到。
@@ -890,10 +1204,11 @@ func _adjust(dir: int) -> void:
 	if c is HSlider:
 		(c as HSlider).value += dir
 	elif c is OptionButton:
-		# 难度：左右键直接换档(外观是 OptionButton，展开由面板内列表负责)
-		var n: int = _preset_opt.item_count
+		# 两个下拉：左右键直接换档(外观是 OptionButton，展开由面板内列表负责)
+		var btn := c as OptionButton
+		var n: int = btn.item_count
 		if n > 0:
-			_on_preset_selected(wrapi(_preset_opt.selected + dir, 0, n))
+			_on_opt_selected(_opt_btn.find(btn), wrapi(btn.selected + dir, 0, n))
 	elif c is Button and (c as Button).toggle_mode:
 		# 色块之间用左右键横移(选定靠 A)
 		_goto(_sel + dir)
@@ -908,8 +1223,11 @@ func _activate() -> void:
 		_on_restart()
 	elif c == _close_btn:
 		close_requested.emit()
-	elif c is OptionButton:
-		# 手柄 A 展开/收起难度列表(列表是面板内的 Control，位置自己定，不涉及窗口定位)
-		_toggle_presets()
+	elif _tab_btns.has(c):
+		# 同上：页签按钮必须在通用的 toggle 分支**之前**判断
+		_on_tab_pressed(_tab_btns.find(c))
+	elif _opt_btn.has(c):
+		# 手柄 A 展开/收起该下拉的列表(列表是面板内的 Control，位置自己定，不涉及窗口定位)
+		_toggle_opt(_opt_btn.find(c))
 	elif c is Button and (c as Button).toggle_mode:
 		(c as Button).button_pressed = true
