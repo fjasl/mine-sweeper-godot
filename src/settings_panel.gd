@@ -529,22 +529,54 @@ func _focus_preset_item() -> void:
 	_preset_hl = clampi(_preset_hl, 0, vb.get_child_count() - 1)
 	(vb.get_child(_preset_hl) as Button).grab_focus()
 
-## 当前"真正被高亮"的是哪一项 —— **以引擎的焦点为准**，不是我记的 _preset_hl。
+## 手柄 A 按下**当前焦点控件**。为什么要自己按：本项目的 ui_accept 里没有任何手柄键位
+## (刻意的，见 POPUP_PAD 的说明)，所以引擎不会把手柄 A 送给焦点控件。
 ##
-## 为什么必须这样：列表项的高亮有**两条**来源，而它们只在一处汇合(引擎的焦点)——
+## **直接调用各自的处理函数，不要用 pressed.emit()**：
+##   · 难度值控件是 OptionButton —— 它内部**也**连着 pressed(那条连接会去弹它自带的
+##     Window)，而且它作为 Button 子类的 toggle 语义不确定；用 emit 时这两条分支
+##     都可能绕开我接的 _toggle_presets，症状就是"按 A 打不开下拉菜单"。
+##   · 应用/重启/关闭直接调面板自己的处理函数，语义明确、不会触发别的连接。
+##   · 色板：直接切 button_pressed(它会发 toggled，_color 靠这个回调)。
+func _press_focused_control() -> void:
+	var f := get_viewport().gui_get_focus_owner()
+	if f == null:
+		return
+	if f == _preset_opt:
+		_toggle_presets()
+	elif f == _apply_btn:
+		_on_apply()
+	elif f == _restart_btn:
+		_on_restart()
+	elif f == _close_btn:
+		close_requested.emit()
+	elif f is BaseButton:
+		var b := f as BaseButton
+		if b.toggle_mode:
+			b.button_pressed = not b.button_pressed
+		else:
+			b.pressed.emit()
+	get_viewport().set_input_as_handled()
+
+## 当前"真正被高亮"的是哪一项 —— **以引擎的焦点为准**，不是我记的 _preset_hl。
+## **焦点不在列表里时返回 -1**（这点很关键：摇杆可以把焦点移到列表之外、例如下方的
+## "应用"键上，那时 A 绝不能被当成"选中列表项"，否则就是"应用没反应、反而又激活了子项"）。
+##
+## 为什么必须看引擎焦点：列表项的高亮有**两条**来源，而它们只在一处汇合(引擎的焦点)——
 ##   · 左摇杆：绑在 ui_up/ui_down 上，走引擎自带的焦点导航，把焦点挪到别的项上，
 ##     **完全不经过本脚本**，所以 _preset_hl 不会跟着变；
 ##   · 十字键：走本脚本下面的 move_up/move_down 分支，那里最后也是 grab_focus()。
-## 之前 A 只读 _preset_hl，于是"摇杆能看到高亮在动、按 A 却选不中" —— 它去选了记下的旧位置。
 func _focused_preset_index() -> int:
 	var vb := _preset_items()
 	if vb == null:
-		return _preset_hl
+		return -1
 	var f := get_viewport().gui_get_focus_owner()
+	if f == null:
+		return -1
 	for i in vb.get_child_count():
 		if vb.get_child(i) == f:
 			return i
-	return _preset_hl                  # 焦点不在列表里(例如又跑回值控件) → 退回记录值
+	return -1
 
 ## 列表开着时的输入，**全部在这里接管**：
 ##   - 手柄 A  → 选中高亮项(以前 A 只会把列表再开关一次，因为列表项不在 _controls 里)
@@ -552,26 +584,48 @@ func _focused_preset_index() -> int:
 ##   - 上/下   → 在列表内移动高亮
 ##   - 鼠标左键点在列表与值控件之外 → 收起
 func _input(event: InputEvent) -> void:
+	# **手柄 A 最先处理，且不受"列表是否开着"影响。**
+	#   焦点在难度列表里 → 选中那一项；焦点在别的控件上(应用/重启/关闭/色板/难度…) → 按下它。
+	#
+	# 为什么必须放在 _preset_open 判断之前：A 确认会把列表收起，之后用户用摇杆移到"应用"
+	# 再按 A 时**列表已经关了** —— 旧代码这时整段不跑，事件落到 _unhandled_input 的
+	# _activate()，而 _activate() 读的是面板自己的 _sel(只有十字键更新它，摇杆动的是引擎
+	# 焦点)，_sel 还停在 open() 里 _goto(0) 放的第 0 项 = 难度 → 于是**又把下拉菜单打开**。
+	# 症状正是"摇杆移到应用按 A，却又激活了下拉菜单"。
+	# (第 749 行那段旧注释描述过同一类故障：鼠标左键也绑在 action_a 上，机制一样。)
+	if event is InputEventJoypadButton and event.is_action_pressed(&"action_a"):
+		if not visible:
+			return
+		var hi := _focused_preset_index()
+		if hi >= 0:
+			_on_preset_picked(hi)
+		else:
+			_press_focused_control()
+		get_viewport().set_input_as_handled()   # 别再让 _activate() 按 _sel 动作第二次
+		return
 	if not _preset_open:
 		return
-	if event.is_action_pressed(&"action_a"):
-		# 以**引擎焦点**为准，这样摇杆移动过的高亮也能被 A 选中(见 _focused_preset_index)
-		_on_preset_picked(_focused_preset_index())
-		get_viewport().set_input_as_handled()
-		return
-	if event.is_action_pressed(&"action_b"):
-		_collapse_presets()
-		get_viewport().set_input_as_handled()
-		return
-	if event.is_action_pressed(&"move_up") or event.is_action_pressed(&"move_down"):
-		var n := _preset_item_count()
-		if n > 0:
-			# 十字键：从**当前焦点**出发移动一格，再交回引擎焦点(与摇杆同一条最终状态)
-			_preset_hl = wrapi(_focused_preset_index()
-				+ (1 if event.is_action_pressed(&"move_down") else -1), 0, n)
-			_focus_preset_item()
-		get_viewport().set_input_as_handled()
-		return
+	# **只接管手柄按钮** —— 别写成"有 action_a 就接管"：桌面的**左键同样映射到
+	# action_a**(右键同理到 action_b)，那样会把鼠标点击在 _input 阶段就吃掉，
+	# 列表项永远收不到 press，症状就是"鼠标点不中列表项"(这正是上一版引入的回归)。
+	# 键鼠一律交给 GUI 正常派发；手柄才由这里接管(手柄 A 不在 ui_accept 里，
+	# 引擎自带的焦点确认够不到它)。
+	if event is InputEventJoypadButton:
+		if event.is_action_pressed(&"action_b"):
+			if _preset_open:
+				_collapse_presets()
+				get_viewport().set_input_as_handled()
+			return
+		if _preset_open and (event.is_action_pressed(&"move_up")
+				or event.is_action_pressed(&"move_down")):
+			var n := _preset_item_count()
+			if n > 0:
+				# 十字键：从**当前焦点**出发移动一格，再交回引擎焦点(与摇杆同一条最终状态)
+				_preset_hl = wrapi(_focused_preset_index()
+					+ (1 if event.is_action_pressed(&"move_down") else -1), 0, n)
+				_focus_preset_item()
+			get_viewport().set_input_as_handled()
+			return
 	if not (event is InputEventMouseButton):
 		return
 	var mb := event as InputEventMouseButton

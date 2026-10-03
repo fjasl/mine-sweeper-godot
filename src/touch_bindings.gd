@@ -235,14 +235,16 @@ func _on_tap(pos: Vector2, fingers: int) -> void:
 func _on_long_press(pos: Vector2, fingers: int) -> void:
 	if _held:
 		return                                  # 左键按住期间不理会长按
-	# 多指长按同多指轻点：插旗（同样不动指针）
-	if fingers >= 2:
-		_fire_action(&"action_b", true)
-		_fire_action(&"action_b", false)
-		_log("flag at pointer %s (multi-finger long press, fingers=%d)" % [pointer_pos, fingers])
-		return
-	var at := pos if tap_at_touch_point else pointer_pos
-	_click(at, MOUSE_BUTTON_RIGHT)
+	# 多指长按同多指轻点：插旗（同样不动指针） 取消多指长按
+	#if fingers >= 2:
+		#_fire_action(&"action_b", true)
+		#_fire_action(&"action_b", false)
+		#_log("flag at pointer %s (multi-finger long press, fingers=%d)" % [pointer_pos, fingers])
+		#return
+	#取消单指长按 右键功能
+	#var at := pos if tap_at_touch_point else pointer_pos
+	#_click(at, MOUSE_BUTTON_RIGHT)
+	
 
 ## 合成一次完整点击(先定位、再按下、再抬起)。
 ## 传入的是**视口逻辑坐标**，出口统一换算成窗口坐标。

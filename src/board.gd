@@ -143,14 +143,14 @@ func _unhandled_input(event: InputEvent) -> void:
 	# 那一次什么都没做，没有理由把它从事件管线里吞掉。
 
 	# 移动光标：方向键 / 手柄 dpad。归属随平台走，见 _nudge
-	elif event.is_action_pressed("move_left"):
-		_nudge(Vector2i(-1, 0))
-	elif event.is_action_pressed("move_right"):
-		_nudge(Vector2i(1, 0))
-	elif event.is_action_pressed("move_up"):
-		_nudge(Vector2i(0, -1))
-	elif event.is_action_pressed("move_down"):
-		_nudge(Vector2i(0, 1))
+	elif event is InputEventJoypadButton or event is InputEventJoypadMotion or event is InputEventKey:
+		var d := Vector2i.ZERO
+		if event.is_action_pressed("move_left"):    d = Vector2i(-1, 0)
+		elif event.is_action_pressed("move_right"): d = Vector2i(1, 0)
+		elif event.is_action_pressed("move_up"):    d = Vector2i(0, -1)
+		elif event.is_action_pressed("move_down"):  d = Vector2i(0, 1)
+		if d != Vector2i.ZERO:
+			_nudge(d, true)
 
 # 这一次"动作"是否允许作用在当前选中格上。
 #
@@ -177,15 +177,18 @@ func _may_act_on_cursor(event: InputEvent) -> bool:
 #  - 桌面端：没有虚拟指针可推(推了引擎也不认，指针仍是系统鼠标)，就直接挪黄框自己。
 #    这样挪完不会被每帧重算抹掉 —— _update_cursor_from_pointer() 只在"指针或世界动过"
 #    时才接管，鼠标一动手柄交还，两边都不打架。
-func _nudge(dir: Vector2i) -> void:
+func _nudge(dir: Vector2i, from_pad := false) -> void:
+	if from_pad:
+		# 手柄/键盘：直接挪黄框，不碰虚拟指针
+		set_cursor_cell((cursor_cell + dir).clamp(Vector2i.ZERO, Vector2i(mines.cols - 1, mines.rows - 1)))
+		return
 	if touch != null and touch.is_tracking_pointer():
 		var xform: Transform2D = get_viewport().get_canvas_transform()
 		var cell := Vector2(mines.tile_set.tile_size)
 		var viewport_per_cell := (xform * cell - xform * Vector2.ZERO).abs()
 		touch.nudge_pointer(Vector2(dir) * viewport_per_cell)
 		return
-	set_cursor_cell(cursor_cell.clamp(Vector2i.ZERO, Vector2i(mines.cols - 1, mines.rows - 1)) + dir)
-	clamp_cursor()
+	set_cursor_cell((cursor_cell + dir).clamp(Vector2i.ZERO, Vector2i(mines.cols - 1, mines.rows - 1)))
 
 # 光标颜色(纯表现)：main 从这里改，不直接钻 board.cursor
 func set_cursor_color(c: Color) -> void:
