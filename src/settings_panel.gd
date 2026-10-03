@@ -46,30 +46,39 @@ const BASE_FONT := preload("res://ui/fonts/base_font.tres")
 ## 第二行是余下的绿→黄绿→棕系→白→雪白→浅灰→中灰→石板灰→深灰→近黑→黑。
 ## **第 0 格仍是黄**，也就是原版默认的光标颜色，所以默认值没有变。
 const PALETTE := [
-	Color(1, 0.9, 0.3),     # 黄
-	Color(1, 0.75, 0.2),    # 橙
-	Color(1, 0.5, 0.2),     # 橙红
-	Color(1, 0.3, 0.3),     # 红
-	Color(1, 0.35, 0.6),    # 玫红
-	Color(1, 0.4, 1),       # 品红
-	Color(0.8, 0.4, 1),     # 紫
-	Color(0.55, 0.4, 1),    # 蓝紫
-	Color(0.35, 0.5, 1),    # 蓝
-	Color(0.3, 0.75, 1),    # 天蓝
-	Color(0.3, 1, 1),       # 青
-	Color(0.2, 0.9, 0.6),   # 蓝绿
-	Color(0.3, 1, 0.4),     # 绿
-	Color(0.65, 1, 0.3),    # 黄绿
-	Color(0.7, 0.55, 0.4),  # 米棕
-	Color(0.55, 0.35, 0.2), # 棕
-	Color(1, 1, 1),         # 白
-	Color(0.9, 0.9, 0.95),  # 雪白
-	Color(0.8, 0.8, 0.8),   # 浅灰
-	Color(0.5, 0.5, 0.5),   # 中灰
-	Color(0.45, 0.5, 0.55), # 石板灰
-	Color(0.25, 0.25, 0.25),# 深灰
-	Color(0.12, 0.12, 0.16),# 近黑
-	Color(0, 0, 0),         # 黑
+	# 27 色 = 23 个等色相 + 4 个中性色。
+	# 色相段：色相环 23 等分(步长 360/23 ≈ 15.65°)，S=0.7、V=1 恒定，只有色相在变。
+	# 起点 51.43° 就是原「黄」的色相 → 第 0 格与原值逐位相同(存档默认值/图标注释都依赖它)。
+	# 方向沿用原来的递减：黄→橙→红→玫红→品红→紫→蓝→青→绿→黄绿。
+	# 中性段：白 1.00 → 浅灰 0.67 → 深灰 0.33 → 黑 0.00，sRGB 明度四等分。
+	Color(1, 0.9, 0.3),      # 0   黄      H  51.4
+	Color(1, 0.72, 0.3),     # 1   橙      H  35.8
+	Color(1, 0.53, 0.3),     # 2   橙红    H  20.1
+	Color(1, 0.35, 0.3),     # 3   红      H   4.5
+	Color(1, 0.3, 0.43),     # 4   玫红    H 348.8
+	Color(1, 0.3, 0.61),     # 5   桃红    H 333.2
+	Color(1, 0.3, 0.8),      # 6   品红    H 317.5
+	Color(1, 0.3, 0.98),     # 7   洋红    H 301.9
+	Color(0.84, 0.3, 1),     # 8   紫      H 286.2
+	Color(0.66, 0.3, 1),     # 9   蓝紫    H 270.6
+	Color(0.47, 0.3, 1),     # 10  靛蓝    H 254.9
+	Color(0.3, 0.31, 1),     # 11  蓝      H 239.3
+	Color(0.3, 0.49, 1),     # 12  蔚蓝    H 223.6
+	Color(0.3, 0.67, 1),     # 13  天蓝    H 208.0
+	Color(0.3, 0.86, 1),     # 14  青蓝    H 192.3
+	Color(0.3, 1, 0.96),     # 15  青      H 176.6
+	Color(0.3, 1, 0.78),     # 16  碧绿    H 161.0
+	Color(0.3, 1, 0.6),      # 17  翠绿    H 145.3
+	Color(0.3, 1, 0.41),     # 18  绿      H 129.7
+	Color(0.37, 1, 0.3),     # 19  草绿    H 114.0
+	Color(0.55, 1, 0.3),     # 20  黄绿    H  98.4
+	Color(0.73, 1, 0.3),     # 21  青柠    H  82.7
+	Color(0.92, 1, 0.3),     # 22  柠檬黄  H  67.1
+	Color(1, 1, 1),          # 23  白      中性 1.00
+	Color(0.67, 0.67, 0.67), # 24  浅灰    中性 0.67
+	Color(0.33, 0.33, 0.33), # 25  深灰    中性 0.33
+	Color(0, 0, 0),          # 26  黑      中性 0.00
+	Color(0, 0, 0, 0),       # 27  透明    斜线格，alpha=0
 ]
 
 ## 三档难度预设，数值照原版扫雷(初级 9x9 雷10 / 中级 16x16 雷40 / 高级 30x16 雷99)。
@@ -202,9 +211,9 @@ func _build_ui() -> void:
 	vb.add_child(_make_preset_row())
 
 	# 范围与跨字段约束一律取自 BoardSpec，界面不自带第二份副本
-	# 滑条初值取自 BoardSpec 的默认值(= 原版初级)，不在本文件里另写一份 ——
-	# 面板并不接收棋盘当前规格(apply_settings 只是发出去给 main 的信号)，
-	# 所以这份初值必须和棋盘默认一致，否则一按"应用"就会把棋盘改掉。
+	# 滑条初值取自 BoardSpec 的默认值(= 原版初级)，不在本文件里另写一份。
+	# **这份初值只是"还没有人来喂"时的兜底**：真正的当前规格由 main 每次拉开抽屉前
+	# 经 set_spec() 注入(见该函数的说明)，所以它不再需要跟棋盘默认值永远保持一致。
 	var def := BoardSpec.new()
 	_col_row  = _make_slider_row("列数", " 列", BoardSpec.MIN_COLS, BoardSpec.MAX_COLS, def.cols)
 	_row_row  = _make_slider_row("行数", " 行", BoardSpec.MIN_ROWS, BoardSpec.MAX_ROWS, def.rows)
@@ -311,7 +320,7 @@ func _slider_of(row: HBoxContainer) -> HSlider:
 func _make_palette() -> Control:
 	var group := ButtonGroup.new()
 	var grid := GridContainer.new()
-	grid.columns = 12
+	grid.columns = 14
 	grid.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	grid.add_theme_constant_override("h_separation", 6)
 	grid.add_theme_constant_override("v_separation", 6)
@@ -386,6 +395,30 @@ func set_cursor_color(c: Color) -> void:
 	for i in _palette_btns.size():
 		var on: bool = i < PALETTE.size() and PALETTE[i].is_equal_approx(c)
 		_palette_btns[i].set_pressed_no_signal(on)
+
+## 注入棋盘**当前**规格：三条滑条回到这一档，难度下拉回显对应档位(对不上任何一档
+## 就落到「自定义」)。每次拉开抽屉之前由 main 喂一次。
+##
+## **为什么必须喂**：本面板从不主动问棋盘，滑条只活在自己这一份值上(见 _build_ui 里
+## "滑条初值"那段)。不喂的后果是它会停在上一轮的值 —— 玩家拉开抽屉、一个控件都没动、
+## 直接点「应用」，就把棋盘改成了那个旧规格，顺带把正在进行的局重开掉。
+## 难度存档上线之后，这个坑从"碰不到"变成"每次开机都能碰到"：
+## 存档里的档位和面板的兜底初值大概率不一致。
+##
+## 写法与 _on_preset_selected 完全一致：_syncing 挡住 value_changed 回头反查预设，
+## 最后自己把下拉项定下来。语句顺序也不能换 —— 雷数上限必须在写雷数值之前先跟上，
+## 否则大雷数会被旧上限夹掉。
+func set_spec(spec: BoardSpec) -> void:
+	if spec == null or _col_row == null:
+		return                          # 还没 _build_ui()，没有控件可写
+	var c := spec.clamped()
+	_syncing = true
+	_slider_of(_col_row).value = c.cols
+	_slider_of(_row_row).value = c.rows
+	_sync_mine_max()                    # 雷数上限先跟上，否则大雷数会被旧上限夹掉
+	_slider_of(_mine_row).value = c.mine_count
+	_syncing = false
+	_refresh_preset_selection()         # 反查档位(这是回显，不发 item_selected)
 
 ## 图标按钮 —— 照模板 ButtonHome / ButtonSetting 的写法：
 ## 只放图标不放文字(icon_max_width 限高 + 图标居中 + 手型光标)，说明放 tooltip。

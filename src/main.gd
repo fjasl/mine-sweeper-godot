@@ -17,11 +17,22 @@ extends Node2D
 @onready var sky: NightSky = $Backdrop/Sky
 
 var _sm: GameStateMachine      # 对局阶段机：ready → playing → won/lost
-var _store: UserStore          # 本机持久化：英雄榜 + 光标颜色
+var _store: UserStore          # 本机持久化：英雄榜 + 光标颜色 + 棋盘规格
 var _menu_open := false        # 菜单是否开着：唯一真相，供输入门控使用
 
 # Called when the node enters the scene tree for the first time.
 func _ready() -> void:
+	# 本机持久化先起来：开机要按存档恢复棋盘规格，而 _relayout() 的几何与相机都按规格算，
+	# 所以"存档 → 规格 → 布局"这个顺序不能变。
+	# (add_child 会触发 UserStore._ready() → load_all()，下面拿到的就是读过存档的值)
+	_store = UserStore.new()
+	add_child(_store)
+
+	# 规格只写进规则层(校验与夹取都在 Board.apply_spec 里)。它**不开局**，
+	# 而 Board._ready() 已经按脚本默认值铺过一次盘了 —— 所以规格真的变了才需要重铺。
+	if board.apply_spec(_store.get_board_spec()):
+		board.new_game()
+
 	# 摆放与相机：几何全部由 _relayout() 统一负责
 	_relayout()
 
@@ -76,10 +87,8 @@ func _ready() -> void:
 	face.restart_requested.connect(_restart)
 	
 	
-	# 本机持久化(英雄榜 + 光标颜色)：user:// 下一个小文件，启动读一次
-	_store = UserStore.new()
-	add_child(_store)
-	# 开机回显：光标颜色与英雄榜都照存档来(没存过就是默认值)
+	# 开机回显：光标颜色与英雄榜都照存档来(没存过就是默认值)。
+	# 存档本身在 _ready() 开头就建好了 —— 棋盘规格必须赶在 _relayout() 之前恢复
 	board.set_cursor_color(_store.get_cursor_color())
 	settings_panel.set_cursor_color(_store.get_cursor_color())
 	settings_panel.set_best_times(_store.snapshot())
@@ -159,6 +168,9 @@ func _set_menu_open(open: bool) -> void:
 	# 开关只负责改状态，画布侧的一切后果都由 _apply_canvas_interaction() 统一施加
 	_apply_canvas_interaction()
 	if open:
+		# 拉开之前先把棋盘的**当前**规格喂给面板：面板从不主动问棋盘，不喂的话
+		# 滑条会停在上一轮的值上，玩家一个控件都没动就点「应用」会把棋盘改回旧规格
+		settings_panel.set_spec(board.spec())
 		settings_panel.open()
 	else:
 		settings_panel.close()
@@ -185,6 +197,10 @@ func _apply_settings(spec: BoardSpec, cursor_color: Color) -> void:
 	# 规格校验/写入都在 Board 里(规则的唯一出处)；规格没变就直接结束
 	if not board.apply_spec(spec):
 		return
+
+	# 落盘的是**夹取后的实际规格**(board.spec())，不是玩家递进来的原值 ——
+	# 这样存档里永远是合法值，开机读回来不用再操心被夹掉
+	_store.set_board_spec(board.spec())
 
 	_restart()      # 新局 + HUD 复位 + 收起弹窗(修掉改尺寸后笑脸/弹窗不复位)
 	_relayout()     # 尺寸变了，表现层几何与相机要重算

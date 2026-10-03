@@ -1,7 +1,8 @@
 extends Node
 class_name UserStore
 
-## 本机的少量持久化状态：**英雄榜**(三档最短通关秒数) + **用户偏好**(光标颜色)。
+## 本机的少量持久化状态：**英雄榜**(三档最短通关秒数) + **用户偏好**(光标颜色)
+## + **棋盘规格**(上次用的难度，开机照它铺盘)。
 ##
 ## 后端用 CoreSystem 的 **config_manager**：它就是"键值 + 同步 ConfigFile"的形状，
 ## 实测能把 Color 与 Dictionary 原样往返，且不需要任何模块开关，正是这两个需求要的。
@@ -22,11 +23,21 @@ const SECTION_UI := "cursor"
 const KEY_COLOR := "color"
 const SECTION_BEST := "best_times"
 const KEY_BEST := "list"
+const SECTION_BOARD := "board"
+const KEY_COLS := "cols"
+const KEY_ROWS := "rows"
+const KEY_MINES := "mines"
 
 ## 档位名 → 最短秒数。没有记录的档位不在字典里。
 var _best: Dictionary = {}
 ## 用户选中的光标颜色。默认取面板色板第一格(与界面一致)。
 var _cursor_color: Color = SettingsPanel.PALETTE[0]
+## 上次用的棋盘规格。初值就用 BoardSpec 自己的默认值(= 原版初级)，本文件不再抄一份 9/9/10。
+##
+## 定位澄清：它存的是**存档**，不是棋盘的第二个真相 —— 对局中的真相永远只在 MineField
+## 那三个 int 上(见 BoardSpec 的类注释)。本字段只在"开机读一次 / 改难度写一次"过手，
+## 并且对外一律给新建的值对象(get_board_spec)，别让调用方拿到这里这份去改。
+var _board: BoardSpec = BoardSpec.new()
 
 
 func _ready() -> void:
@@ -44,6 +55,14 @@ func load_all() -> void:
 	var c: Variant = cm.get_value(SECTION_UI, KEY_COLOR, _cursor_color)
 	if c is Color:
 		_cursor_color = c
+	# 棋盘规格：三个 int 各自兜底，读完再统一过一遍 clamped() ——
+	# 存档被手改坏、或跨版本换了约束(见 BoardSpec 的 MIN/MAX)时，
+	# 只会被夹回合法范围，绝不会让开局拿到一个非法尺寸
+	var b := BoardSpec.make(
+		int(cm.get_value(SECTION_BOARD, KEY_COLS, _board.cols)),
+		int(cm.get_value(SECTION_BOARD, KEY_ROWS, _board.rows)),
+		int(cm.get_value(SECTION_BOARD, KEY_MINES, _board.mine_count)))
+	_board = b.clamped()
 
 
 func _save() -> void:
@@ -51,6 +70,9 @@ func _save() -> void:
 	# 注意 set_value **不会**自动落盘，必须显式 save_config()(插件源码 config_manager.gd:108/73)
 	cm.set_value(SECTION_BEST, KEY_BEST, _best)
 	cm.set_value(SECTION_UI, KEY_COLOR, _cursor_color)
+	cm.set_value(SECTION_BOARD, KEY_COLS, _board.cols)
+	cm.set_value(SECTION_BOARD, KEY_ROWS, _board.rows)
+	cm.set_value(SECTION_BOARD, KEY_MINES, _board.mine_count)
 	cm.save_config()
 
 
@@ -102,4 +124,24 @@ func set_cursor_color(c: Color) -> void:
 	if c.is_equal_approx(_cursor_color):
 		return                          # 没变就不落盘，免得每次"应用"都写一次文件
 	_cursor_color = c
+	_save()
+
+
+# ---- 棋盘规格(上次用的难度) ----
+
+## 上次用的规格。返回**新建的值对象**，与 Board.spec() 同一套约定：
+## 真相永远在 MineField 上，这里给的只是一份快照，别存起来当状态
+func get_board_spec() -> BoardSpec:
+	return BoardSpec.make(_board.cols, _board.rows, _board.mine_count)
+
+
+## 记一次难度。校验/夹取只走 BoardSpec.clamped()(规格约束的唯一出处)，
+## 本方法只负责"过一手存档"，不判断合法性
+func set_board_spec(s: BoardSpec) -> void:
+	if s == null:
+		return
+	var c := s.clamped()
+	if c.equals(_board):
+		return                          # 没变就不落盘，和 set_cursor_color 同一套节制
+	_board = c
 	_save()
